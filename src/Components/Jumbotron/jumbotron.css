@@ -1,0 +1,15 @@
+/* Scroll indicator animation */
+.scroll-line {
+  animation: scrollPulse 2s ease-in-out infinite;
+}
+
+@keyframes scrollPulse {
+  0%, 100% {
+    opacity: 0.3;
+    height: 20px;
+  }
+  50% {
+    opacity: 1;
+    height: 32px;
+  }
+}
