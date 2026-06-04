@@ -6,10 +6,24 @@ const bookingController = {
     try {
       const payment_type = req.body.payment_type || 'bank_transfer';
 
+      const Room = require('../Models/Room');
+      const room_id = req.body.room_id;
+
+      if (!room_id) {
+        return res.status(400).json({ message: 'Room ID is required' });
+      }
+
+      // Validasi Ketersediaan Kamar
+      const isAvailable = await Room.checkAvailability(room_id, req.body.check_in, req.body.check_out);
+      if (!isAvailable) {
+        return res.status(400).json({ message: 'Maaf, kamar ini sudah dibooking pada tanggal tersebut.' });
+      }
+
       const bookingData = {
         user_id: req.user.id,
-        name: req.body.name,
-        nama: req.body.nama,
+        room_id: room_id,
+        name: req.body.name, // tetap simpan nama kamar
+        nama: req.body.nama, // nama tamu
         email: req.body.email,
         phone_number: req.body.phone_number,
         check_in: req.body.check_in,

@@ -2,12 +2,12 @@ const db = require('../config/db');
 
 class Booking {
   static async create(bookingData) {
-    const { user_id, name, nama, email, phone_number, check_in, check_out, harga, payment_proof, status } = bookingData;
+    const { user_id, room_id, name, nama, email, phone_number, check_in, check_out, harga, payment_proof, status } = bookingData;
     const [result] = await db.query(
       `INSERT INTO bookings 
-       (user_id, name, nama, email, phone_number, check_in, check_out, harga, status, payment_proof) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [user_id, name, nama, email, phone_number, check_in, check_out, harga, status, payment_proof]
+       (user_id, room_id, name, nama, email, phone_number, check_in, check_out, harga, status, payment_proof) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [user_id, room_id, name, nama, email, phone_number, check_in, check_out, harga, status, payment_proof]
     );
     return { id: result.insertId, ...bookingData };
   }

@@ -23,8 +23,8 @@ export default function Component({ setIsAuthenticated, isAuthenticated, setUser
   const [gatewayError, setGatewayError] = useState('');
   const [snapLoaded, setSnapLoaded] = useState(false);
   const state = location.state || {};
-  const { name, harga, daysBetween, Checkin, Checkout } = state;
-  const bookingReady = Boolean(name && harga && daysBetween && Checkin && Checkout);
+  const { room_id, name, harga, daysBetween, Checkin, Checkout } = state;
+  const bookingReady = Boolean(room_id && name && harga && daysBetween && Checkin && Checkout);
 
   useEffect(() => {
     const validateToken = async () => {
@@ -55,7 +55,6 @@ export default function Component({ setIsAuthenticated, isAuthenticated, setUser
     nama: '',
     email: '',
     phone_number: '',
-    payment_type: 'bank_transfer',
   });
 
   const handleChange = (e) => {
@@ -85,6 +84,7 @@ export default function Component({ setIsAuthenticated, isAuthenticated, setUser
     e.preventDefault();
     setLoading(true);
     const formDataToSend = new FormData();
+    formDataToSend.append('room_id', state.room_id);
     formDataToSend.append('nama', formData.nama);
     formDataToSend.append('email', formData.email);
     formDataToSend.append('phone_number', formData.phone_number);
@@ -92,7 +92,6 @@ export default function Component({ setIsAuthenticated, isAuthenticated, setUser
     formDataToSend.append('check_in', state.Checkin);
     formDataToSend.append('check_out', state.Checkout);
     formDataToSend.append('harga', hargaDiskon ? hargaDiskon.harga_setelah_diskon : harga);
-    formDataToSend.append('payment_type', formData.payment_type);
 
     try {
       const response = await api.post('/bookings', formDataToSend);
@@ -148,7 +147,9 @@ export default function Component({ setIsAuthenticated, isAuthenticated, setUser
       }
     } catch (err) {
       setLoading(false);
-      alert('Gagal membuat booking: ' + (err.response?.data?.message || err.message));
+      const errorMessage = err.response?.data?.message || err.message;
+      setGatewayError(errorMessage); // Menampilkan error spesifik dari backend, termasuk jika kamar penuh
+      alert('Gagal membuat booking: ' + errorMessage);
     }
   };
 
@@ -316,21 +317,6 @@ export default function Component({ setIsAuthenticated, isAuthenticated, setUser
                     required
                   />
                 </div>
-                <div>
-                  <label className="block text-hotel-charcoal/60 text-xs font-medium mb-2 uppercase tracking-wider">Payment Method</label>
-                  <select
-                    name="payment_type"
-                    value={formData.payment_type}
-                    onChange={handleChange}
-                    className="input-premium w-full text-sm"
-                  >
-                    <option value="bank_transfer">Bank Transfer</option>
-                    <option value="gopay">GoPay</option>
-                    <option value="shopeepay">ShopeePay</option>
-                    <option value="credit_card">Credit Card</option>
-                  </select>
-                </div>
-
                 {gatewayError && <p className="text-sm text-hotel-danger">{gatewayError}</p>}
 
                 {/* Total */}

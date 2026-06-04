@@ -101,7 +101,6 @@ async function createPaymentSession({ booking_id, amount, payment_type, customer
         name: item_name || 'Hotel Booking',
       },
     ],
-    enabled_payments: buildEnabledPayments(payment_type),
     credit_card: {
       secure: true,
     },

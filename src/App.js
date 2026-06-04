@@ -22,6 +22,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [Count, setCount] = useState(0);
   const [Book, setBook] = useState(0);
+  const [searchCriteria, setSearchCriteria] = useState(null);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -93,10 +94,10 @@ function App() {
               path="/"
               element={
                 <>
-                  <Jumbotron user={user} />
+                  <Jumbotron user={user} onSearch={setSearchCriteria} />
                   <About />
                   <Services />
-                  <Rooms handlerooms={handlerooms} />
+                  <Rooms handlerooms={handlerooms} searchCriteria={searchCriteria} />
                 </>
               }
             />

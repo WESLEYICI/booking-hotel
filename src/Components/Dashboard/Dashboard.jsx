@@ -4,6 +4,7 @@ import UserList from './UserList';
 import Navdashboard from './Navdashboard';
 import DataBookings from './DataBookings';
 import Databoard from './Databoard';
+import DataRooms from './DataRooms';
 import DataDiscount from './DataDiscount';
 import { Route, Routes, Navigate } from 'react-router-dom';
 
@@ -15,6 +16,7 @@ const Dashboard = () => {
         <Routes>
           <Route index element={<Databoard />} />
           <Route path="Userlist" element={<UserList />} />
+          <Route path="Rooms" element={<DataRooms />} />
           <Route path="Discount" element={<DataDiscount />} />
           <Route path="Databookings" element={<DataBookings />} />
           <Route path="DataPayments" element={<DataPayments />} />

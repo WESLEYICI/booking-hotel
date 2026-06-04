@@ -1,6 +1,6 @@
 import { useLocation } from 'react-router-dom';
 import { FaUser, FaEye, FaStar } from 'react-icons/fa';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { SlSizeFullscreen } from 'react-icons/sl';
 import { useNavigate } from 'react-router-dom';
 import { HiOutlineCalendar } from 'react-icons/hi';
@@ -12,7 +12,15 @@ export default function Component({ handlebook }) {
   const [harga, setHarga] = useState(null);
 
   const location = useLocation();
-  const { name, Price, imageUrl, imageUrl2, user, facility, size, description, amenities } = location.state || {};
+  const { room_id, name, Price, imageUrl, imageUrl2, user, facility, size, description, amenities, searchCheckIn, searchCheckOut } = location.state || {};
+  
+  useEffect(() => {
+    if (searchCheckIn && searchCheckOut) {
+      setCheckin(searchCheckIn);
+      setCheckout(searchCheckOut);
+      calculateDays(searchCheckIn, searchCheckOut);
+    }
+  }, [searchCheckIn, searchCheckOut]);
 
   const handleDateCheckin = (e) => {
     const selectedDate = e.target.value;
@@ -46,6 +54,7 @@ export default function Component({ handlebook }) {
     if (Checkin && Checkout) {
       Navigate('/BookingConfirm', {
         state: {
+          room_id,
           name,
           harga,
           daysBetween,

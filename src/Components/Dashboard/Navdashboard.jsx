@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FaHome, FaAddressBook, FaMoneyCheckAlt, FaUsers } from 'react-icons/fa';
+import { FaHome, FaAddressBook, FaMoneyCheckAlt, FaUsers, FaBed } from 'react-icons/fa';
 import { BiSolidDiscount } from 'react-icons/bi';
 import { FiMenu, FiX } from 'react-icons/fi';
 import { Link, useLocation } from 'react-router-dom';
@@ -11,6 +11,7 @@ const Navdashboard = () => {
   const menuItems = [
     { to: '/dashboard', label: 'Dashboard', icon: FaHome },
     { to: '/dashboard/Userlist', label: 'Users', icon: FaUsers },
+    { to: '/dashboard/Rooms', label: 'Rooms', icon: FaBed },
     { to: '/dashboard/Databookings', label: 'Bookings', icon: FaAddressBook },
     { to: '/dashboard/DataPayments', label: 'Payments', icon: FaMoneyCheckAlt },
     { to: '/dashboard/Discount', label: 'Vouchers', icon: BiSolidDiscount },
