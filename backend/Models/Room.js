@@ -2,7 +2,20 @@ const db = require('../config/db');
 
 class Room {
   static async findAll() {
-    const [rows] = await db.query('SELECT * FROM rooms WHERE is_active = true ORDER BY id ASC');
+    const today = new Date().toISOString().split('T')[0];
+    const [rows] = await db.query(
+      `SELECT r.*,
+        CASE WHEN (
+          SELECT COUNT(*) FROM bookings b
+          WHERE b.room_id = r.id
+            AND b.status != 'cancelled'
+            AND b.check_in <= ? AND b.check_out > ?
+        ) = 0 THEN true ELSE false END AS is_available
+       FROM rooms r
+       WHERE r.is_active = true
+       ORDER BY r.id ASC`,
+      [today, today]
+    );
     return rows;
   }
 
