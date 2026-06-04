@@ -1,11 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { FaUsers, FaCalendarCheck, FaCreditCard } from 'react-icons/fa';
+import { FaUsers, FaCalendarCheck, FaCreditCard, FaBed, FaDoorOpen } from 'react-icons/fa';
+import { MdHotel } from 'react-icons/md';
 import api from '../../utils/api';
 
 const Databoard = () => {
   const [totalUser, settotalUser] = useState(0);
   const [totalBook, settotalBook] = useState(0);
   const [totalpayment, settotalPayment] = useState(0);
+  const [totalRooms, setTotalRooms] = useState(0);
+  const [roomsFull, setRoomsFull] = useState(0);
+  const [roomsAvailable, setRoomsAvailable] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -13,35 +17,45 @@ const Databoard = () => {
       try {
         const res = await api.get('/users');
         settotalUser(res.data.length);
-        setLoading(false);
       } catch (err) {
         console.error('Gagal ambil user:', err);
-        setLoading(false);
       }
     };
+
     const fetchBookings = async () => {
       try {
         const res = await api.get('/bookings/all');
         settotalBook(res.data.data.length);
       } catch (err) {
-        console.error('Gagal mengambil data:', err);
-      } finally {
-        setLoading(false);
+        console.error('Gagal mengambil data booking:', err);
       }
     };
+
     const fetchPayments = async () => {
       try {
         const res = await api.get('/bookings/all-payments');
         settotalPayment(res.data.length);
-        setLoading(false);
       } catch (error) {
         console.error(error);
+      }
+    };
+
+    const fetchRooms = async () => {
+      try {
+        const res = await api.get('/rooms');
+        const rooms = res.data.data || [];
+        setTotalRooms(rooms.length);
+        const full = rooms.filter(r => r.is_available === false || r.is_available === 0).length;
+        setRoomsFull(full);
+        setRoomsAvailable(rooms.length - full);
+      } catch (err) {
+        console.error('Gagal ambil kamar:', err);
+      } finally {
         setLoading(false);
       }
     };
-    fetchPayments();
-    fetchBookings();
-    fetchUsers();
+
+    Promise.all([fetchUsers(), fetchBookings(), fetchPayments(), fetchRooms()]);
   }, []);
 
   const statCards = [
@@ -66,6 +80,13 @@ const Databoard = () => {
       gradient: 'from-emerald-600 to-emerald-800',
       iconBg: 'bg-emerald-500/20',
     },
+    {
+      title: 'Total Kamar',
+      value: totalRooms,
+      icon: MdHotel,
+      gradient: 'from-violet-600 to-violet-800',
+      iconBg: 'bg-violet-500/20',
+    },
   ];
 
   return (
@@ -81,7 +102,7 @@ const Databoard = () => {
       </div>
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {statCards.map((card) => {
           const Icon = card.icon;
           return (
@@ -103,6 +124,59 @@ const Databoard = () => {
             </div>
           );
         })}
+      </div>
+
+      {/* Room Availability Status */}
+      <div className="bg-white rounded-2xl shadow-card p-6">
+        <h3 className="font-playfair text-lg font-bold text-hotel-primary mb-1">Status Kamar Hari Ini</h3>
+        <p className="text-hotel-charcoal/40 text-xs mb-5">Berdasarkan booking aktif yang sedang berlangsung</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Tersedia */}
+          <div className="flex items-center gap-4 bg-green-50 border border-green-100 rounded-xl px-5 py-4">
+            <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+              <FaDoorOpen className="text-green-600 text-xl" />
+            </div>
+            <div>
+              <p className="text-xs text-green-700 font-medium uppercase tracking-wide">Tersedia</p>
+              <p className="font-playfair text-3xl font-bold text-green-700">
+                {loading ? '...' : roomsAvailable}
+              </p>
+              <p className="text-xs text-green-600/70 mt-0.5">kamar siap dipesan</p>
+            </div>
+          </div>
+          {/* Penuh */}
+          <div className="flex items-center gap-4 bg-red-50 border border-red-100 rounded-xl px-5 py-4">
+            <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+              <FaBed className="text-red-500 text-xl" />
+            </div>
+            <div>
+              <p className="text-xs text-red-600 font-medium uppercase tracking-wide">Sedang Penuh</p>
+              <p className="font-playfair text-3xl font-bold text-red-600">
+                {loading ? '...' : roomsFull}
+              </p>
+              <p className="text-xs text-red-500/70 mt-0.5">kamar sedang terisi</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Progress Bar */}
+        {!loading && totalRooms > 0 && (
+          <div className="mt-5">
+            <div className="flex justify-between text-xs text-hotel-charcoal/50 mb-1.5">
+              <span>Tingkat Hunian</span>
+              <span>{Math.round((roomsFull / totalRooms) * 100)}%</span>
+            </div>
+            <div className="w-full bg-gray-100 rounded-full h-2.5 overflow-hidden">
+              <div
+                className="h-2.5 rounded-full transition-all duration-1000"
+                style={{
+                  width: `${(roomsFull / totalRooms) * 100}%`,
+                  background: 'linear-gradient(90deg, #C9A84C, #E8C56D)',
+                }}
+              />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
