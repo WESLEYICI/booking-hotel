@@ -175,7 +175,7 @@ const DataRooms = () => {
           <table className="w-full text-sm">
             <thead>
               <tr>
-                <th className="text-left">ID</th>
+                <th className="text-left">No. Kamar</th>
                 <th className="text-left">Gambar</th>
                 <th className="text-left">Nama</th>
                 <th className="text-left">Harga/Malam</th>
@@ -188,7 +188,13 @@ const DataRooms = () => {
             <tbody>
               {rooms.map(room => (
                 <tr key={room.id} className="border-b border-gray-50 hover:bg-hotel-accent/[0.02] transition-colors">
-                  <td className="font-medium text-hotel-primary">#{room.id}</td>
+                  <td>
+                    <div className="flex flex-col">
+                      <span className="inline-flex items-center justify-center w-14 px-2 py-1 rounded-lg bg-hotel-primary/10 text-hotel-primary text-xs font-bold tracking-widest border border-hotel-primary/20">
+                        R-{String(room.id).padStart(3, '0')}
+                      </span>
+                    </div>
+                  </td>
                   <td>
                     <img
                       src={room.image_url}

@@ -7,6 +7,21 @@ const Jumbotron = ({ user, onSearch }) => {
   const [checkOut, setCheckOut] = useState('');
   const [guests, setGuests] = useState('1');
 
+  // Tanggal minimum: hari ini
+  const today = new Date().toISOString().split('T')[0];
+
+  // Tanggal minimum check-out: besok atau sehari setelah check-in
+  const minCheckOut = checkIn
+    ? new Date(new Date(checkIn).getTime() + 86400000).toISOString().split('T')[0]
+    : new Date(new Date().getTime() + 86400000).toISOString().split('T')[0];
+
+  const handleCheckInChange = (e) => {
+    const val = e.target.value;
+    setCheckIn(val);
+    // Reset check-out jika tidak lagi valid
+    if (checkOut && checkOut <= val) setCheckOut('');
+  };
+
   const handleSearch = (e) => {
     e.preventDefault();
     if (onSearch) {
@@ -64,7 +79,8 @@ const Jumbotron = ({ user, onSearch }) => {
                   <input 
                     type="date" 
                     value={checkIn}
-                    onChange={(e) => setCheckIn(e.target.value)}
+                    min={today}
+                    onChange={handleCheckInChange}
                     required
                     className="w-full bg-transparent border-none text-white p-0 text-sm focus:ring-0 [&::-webkit-calendar-picker-indicator]:filter-[invert(1)]"
                   />
@@ -78,6 +94,7 @@ const Jumbotron = ({ user, onSearch }) => {
                   <input 
                     type="date" 
                     value={checkOut}
+                    min={minCheckOut}
                     onChange={(e) => setCheckOut(e.target.value)}
                     required
                     className="w-full bg-transparent border-none text-white p-0 text-sm focus:ring-0 [&::-webkit-calendar-picker-indicator]:filter-[invert(1)]"

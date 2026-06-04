@@ -10,6 +10,7 @@ const Databoard = () => {
   const [totalRooms, setTotalRooms] = useState(0);
   const [roomsFull, setRoomsFull] = useState(0);
   const [roomsAvailable, setRoomsAvailable] = useState(0);
+  const [fullRoomsList, setFullRoomsList] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -45,9 +46,10 @@ const Databoard = () => {
         const res = await api.get('/rooms');
         const rooms = res.data.data || [];
         setTotalRooms(rooms.length);
-        const full = rooms.filter(r => r.is_available === false || r.is_available === 0).length;
-        setRoomsFull(full);
-        setRoomsAvailable(rooms.length - full);
+        const full = rooms.filter(r => r.is_available === false || r.is_available === 0);
+        setRoomsFull(full.length);
+        setRoomsAvailable(rooms.length - full.length);
+        setFullRoomsList(full);
       } catch (err) {
         console.error('Gagal ambil kamar:', err);
       } finally {
@@ -175,6 +177,32 @@ const Databoard = () => {
                 }}
               />
             </div>
+          </div>
+        )}
+
+        {/* Daftar kamar yang sedang penuh */}
+        {!loading && fullRoomsList.length > 0 && (
+          <div className="mt-5 pt-5 border-t border-gray-100">
+            <p className="text-xs font-semibold text-red-600 uppercase tracking-wider mb-3">🔴 Kamar Sedang Penuh:</p>
+            <div className="flex flex-wrap gap-2">
+              {fullRoomsList.map(room => (
+                <div
+                  key={room.id}
+                  className="flex items-center gap-2 bg-red-50 border border-red-100 rounded-xl px-3 py-2"
+                >
+                  <span className="text-[10px] font-bold text-red-500 bg-red-100 px-2 py-0.5 rounded-md tracking-widest">
+                    R-{String(room.id).padStart(3, '0')}
+                  </span>
+                  <span className="text-xs text-red-700 font-medium">{room.name}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {!loading && fullRoomsList.length === 0 && (
+          <div className="mt-5 pt-5 border-t border-gray-100">
+            <p className="text-xs text-green-600 font-medium">✅ Semua kamar saat ini tersedia!</p>
           </div>
         )}
       </div>
