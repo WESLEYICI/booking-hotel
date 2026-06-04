@@ -72,6 +72,7 @@ const bookingController = {
     try {
       const { id } = req.params;
       const { status } = req.body;
+      const Payment = require('../Models/Payment');
 
       if (!id || !status) {
         return res.status(400).json({
@@ -86,6 +87,20 @@ const bookingController = {
           success: false,
           message: `Status tidak valid. Gunakan: ${validStatuses.join(', ')}`,
         });
+      }
+
+      // Jika admin ingin confirm, cek apakah user sudah membayar
+      if (status === 'confirmed') {
+        const payments = await Payment.findByBookingId(id);
+        const hasPaid = payments && payments.some(
+          (p) => p.transaction_status === 'settlement' || p.transaction_status === 'capture'
+        );
+        if (!hasPaid) {
+          return res.status(403).json({
+            success: false,
+            message: 'Tidak dapat mengkonfirmasi booking. User belum melakukan pembayaran.',
+          });
+        }
       }
 
       const updatedBooking = await Booking.updateStatus(id, status);

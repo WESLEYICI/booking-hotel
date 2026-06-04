@@ -35,6 +35,11 @@ class Payment {
     const [result] = await db.query('UPDATE payments SET transaction_status = ? WHERE order_id = ?', [transactionStatus, orderId]);
     return result;
   }
+
+  static async findByBookingId(bookingId) {
+    const [rows] = await db.query('SELECT * FROM payments WHERE booking_id = ?', [bookingId]);
+    return rows;
+  }
 }
 
 module.exports = Payment;
