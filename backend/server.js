@@ -44,6 +44,18 @@ async function prepareDatabase() {
       console.log('rooms table already exists.');
     }
 
+    // Check for is_active column in rooms
+    const [isActiveColumnRows] = await db.query(
+      `SELECT COUNT(*) AS cnt FROM information_schema.COLUMNS \
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'rooms' AND COLUMN_NAME = 'is_active'`
+    );
+    if (isActiveColumnRows[0].cnt === 0) {
+      await db.query(`ALTER TABLE rooms ADD COLUMN is_active BOOLEAN DEFAULT true`);
+      console.log('Added is_active column to rooms table.');
+    } else {
+      console.log('is_active column already exists.');
+    }
+
     // 2. Add room_id to bookings table if not exists
     const [roomIdColumnRows] = await db.query(
       `SELECT COUNT(*) AS cnt FROM information_schema.COLUMNS \

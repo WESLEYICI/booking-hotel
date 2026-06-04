@@ -82,15 +82,15 @@ const DataRooms = () => {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this room?')) return;
+    if (!window.confirm('Are you sure you want to deactivate this room? It will be hidden from guests but kept in the history.')) return;
     try {
       await api.delete(`/rooms/${id}`);
-      setMsg('Room deleted successfully!');
+      setMsg('Room deactivated successfully!');
       setError('');
       setMsgOpen(true);
       fetchRooms();
     } catch (err) {
-      setError('Failed to delete room');
+      setError('Failed to deactivate room');
       setMsg('');
       setMsgOpen(true);
     }
@@ -150,7 +150,7 @@ const DataRooms = () => {
                       <button onClick={() => handleOpenEdit(room)} className="p-2 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors" title="Edit">
                         <MdEdit />
                       </button>
-                      <button onClick={() => handleDelete(room.id)} className="p-2 rounded-lg bg-red-50 text-hotel-danger hover:bg-red-100 transition-colors" title="Delete">
+                      <button onClick={() => handleDelete(room.id)} className="p-2 rounded-lg bg-red-50 text-hotel-danger hover:bg-red-100 transition-colors" title="Deactivate">
                         <MdDelete />
                       </button>
                     </div>

@@ -13,6 +13,19 @@ const bookingController = {
         return res.status(400).json({ message: 'Room ID is required' });
       }
 
+      // Validasi Tanggal (Keamanan Logic)
+      const checkInDate = new Date(req.body.check_in);
+      const checkOutDate = new Date(req.body.check_out);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      if (checkInDate < today) {
+        return res.status(400).json({ message: 'Tanggal Check-in tidak boleh di masa lalu.' });
+      }
+      if (checkOutDate <= checkInDate) {
+        return res.status(400).json({ message: 'Tanggal Check-out harus lebih besar dari Check-in.' });
+      }
+
       // Validasi Ketersediaan Kamar
       const isAvailable = await Room.checkAvailability(room_id, req.body.check_in, req.body.check_out);
       if (!isAvailable) {

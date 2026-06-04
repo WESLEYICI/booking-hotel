@@ -2,7 +2,7 @@ const db = require('../config/db');
 
 class Room {
   static async findAll() {
-    const [rows] = await db.query('SELECT * FROM rooms ORDER BY id ASC');
+    const [rows] = await db.query('SELECT * FROM rooms WHERE is_active = true ORDER BY id ASC');
     return rows;
   }
 
@@ -33,7 +33,7 @@ class Room {
   }
 
   static async delete(id) {
-    const [result] = await db.query('DELETE FROM rooms WHERE id = ?', [id]);
+    const [result] = await db.query('UPDATE rooms SET is_active = false WHERE id = ?', [id]);
     return result;
   }
 
@@ -62,7 +62,7 @@ class Room {
             AND (b.check_in < ? AND b.check_out > ?)
         ) = 0 THEN true ELSE false END as is_available
        FROM rooms r
-       WHERE r.capacity >= ?
+       WHERE r.capacity >= ? AND r.is_active = true
        ORDER BY r.id ASC`,
       [checkOut, checkIn, minCapacity]
     );
