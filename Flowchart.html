@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BPM / Flowchart Booking Hotel</title>
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({ startOnLoad: true, theme: 'default' });
+  </script>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      background-color: #f0f4f8;
+      padding: 20px;
+    }
+    .container {
+      background: white;
+      padding: 40px;
+      border-radius: 12px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+      width: 100%;
+      max-width: 800px;
+      text-align: center;
+    }
+    h2 {
+      color: #333;
+      margin-bottom: 30px;
+    }
+    .instruction {
+      margin-top: 30px;
+      color: #666;
+      font-size: 0.9em;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <h2>Alur Sistem (BPM) - My Hotels</h2>
+    
+    <div class="mermaid">
+      graph TD
+          A([Mulai]) --> B{Punya Akun?}
+          B -- Belum --> C[Register]
+          C --> D[Login]
+          B -- Sudah --> D
+          D --> E[Pilih Kamar & Filter Fasilitas]
+          E --> F[Isi Form Booking & Masukkan Voucher Diskon]
+          F --> G[Proses Pembayaran via Midtrans]
+          G --> H{Status Pembayaran}
+          H -- Gagal/Batal --> I[Status Cancelled]
+          H -- Berhasil --> J[Status Confirmed]
+          J --> K[Sistem Otomatis Mengirim Email Invoice]
+          K --> L[Tamu Menginap & Check-out]
+          L --> M[Beri Ulasan/Review Bintang]
+          M --> N([Selesai])
+    </div>
+
+    <p class="instruction">
+      * Silakan klik kanan pada bagan di atas lalu pilih <b>"Copy Image"</b> atau <b>"Save Image As..."</b> untuk memasukkannya ke PowerPoint.
+    </p>
+  </div>
+
+</body>
+</html>
