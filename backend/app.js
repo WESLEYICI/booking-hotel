@@ -11,7 +11,10 @@ const app = express();
 const path = require('path');
 app.use(
   cors({
-    origin: ['http://192.168.100.230:3000', 'http://localhost:3000', 'https://booking-hotel-woad.vercel.app'],
+    origin: function (origin, callback) {
+      // Izinkan semua domain (termasuk localhost dan Vercel nantinya)
+      callback(null, true);
+    },
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
     credentials: true,
   })
