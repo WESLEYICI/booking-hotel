@@ -43,15 +43,25 @@ const ModalPay = ({ modalState, setModalState }) => {
             ))}
           </div>
 
-          <div className="bg-hotel-cream rounded-xl p-4 space-y-2">
-            <p className="text-hotel-accent text-xs font-semibold uppercase tracking-wider">Bank Tujuan</p>
-            <div className="space-y-1.5">
-              <p className="text-hotel-primary text-sm">
-                <span className="font-semibold">BCA:</span> 1234567890 a.n. Hotel Demo
-              </p>
-              <p className="text-hotel-primary text-sm">
-                <span className="font-semibold">GoPay:</span> 081234567890 a.n. Hotel Demo
-              </p>
+          <div className="bg-hotel-cream rounded-xl p-4 space-y-3">
+            <div>
+              <p className="text-hotel-accent text-xs font-semibold uppercase tracking-wider">Bank Tujuan</p>
+              <div className="space-y-1.5 mt-1">
+                <p className="text-hotel-primary text-sm">
+                  <span className="font-semibold">BCA:</span> 1234567890 a.n. Hotel Demo
+                </p>
+                <p className="text-hotel-primary text-sm">
+                  <span className="font-semibold">Mandiri:</span> 9876543210 a.n. Hotel Demo
+                </p>
+              </div>
+            </div>
+            <div className="border-t border-hotel-accent/20 pt-3">
+              <p className="text-hotel-accent text-xs font-semibold uppercase tracking-wider">QRIS</p>
+              <div className="mt-1">
+                <p className="text-hotel-primary text-sm">
+                  Scan QRIS pada saat checkout atau di halaman My Bookings.
+                </p>
+              </div>
             </div>
           </div>
         </div>

@@ -11,7 +11,16 @@ const getFileUrl = (req, file) => {
 const roomController = {
   getAllRooms: async (req, res) => {
     try {
-      const rooms = await Room.findAll();
+      let rooms = await Room.findAll();
+      
+      const { maxPrice, facility } = req.query;
+      if (maxPrice && !isNaN(maxPrice)) {
+        rooms = rooms.filter(r => Number(r.price) <= Number(maxPrice));
+      }
+      if (facility && facility.trim() !== '') {
+        rooms = rooms.filter(r => r.facility.toLowerCase().includes(facility.toLowerCase()));
+      }
+
       res.json({ success: true, data: rooms });
     } catch (err) {
       console.error('Error getting rooms:', err);
@@ -32,7 +41,7 @@ const roomController = {
 
   createRoom: async (req, res) => {
     try {
-      const { name, price, capacity, size, facility, description, amenities } = req.body;
+      const { name, price, capacity, size, facility, description, amenities, total_units } = req.body;
 
       // Gambar wajib ada saat create
       if (!req.files || !req.files['image']) {
@@ -47,6 +56,7 @@ const roomController = {
       const newRoom = await Room.create({
         name, price, capacity, size, facility, description, amenities,
         image_url, image_url_2,
+        total_units: parseInt(total_units) || 1,
       });
       res.status(201).json({ success: true, data: newRoom });
     } catch (err) {
@@ -60,7 +70,7 @@ const roomController = {
       const existing = await Room.findById(req.params.id);
       if (!existing) return res.status(404).json({ success: false, message: 'Kamar tidak ditemukan' });
 
-      const { name, price, capacity, size, facility, description, amenities } = req.body;
+      const { name, price, capacity, size, facility, description, amenities, total_units } = req.body;
 
       // Gunakan file baru jika ada, jika tidak pertahankan yang lama
       const image_url   = req.files && req.files['image']
@@ -74,6 +84,7 @@ const roomController = {
       await Room.update(req.params.id, {
         name, price, capacity, size, facility, description, amenities,
         image_url, image_url_2,
+        total_units: parseInt(total_units) || existing.total_units || 1,
       });
       res.json({ success: true, message: 'Kamar berhasil diupdate' });
     } catch (err) {
@@ -108,12 +119,20 @@ const roomController = {
 
   searchAvailableRooms: async (req, res) => {
     try {
-      const { checkIn, checkOut, guests } = req.query;
+      const { checkIn, checkOut, guests, maxPrice, facility } = req.query;
       if (!checkIn || !checkOut) {
         return res.status(400).json({ success: false, message: 'checkIn and checkOut query params are required' });
       }
       const minCapacity = guests ? parseInt(guests) : 1;
-      const rooms = await Room.findWithAvailabilityStatus(checkIn, checkOut, minCapacity);
+      let rooms = await Room.findWithAvailabilityStatus(checkIn, checkOut, minCapacity);
+
+      if (maxPrice && !isNaN(maxPrice)) {
+        rooms = rooms.filter(r => Number(r.price) <= Number(maxPrice));
+      }
+      if (facility && facility.trim() !== '') {
+        rooms = rooms.filter(r => r.facility.toLowerCase().includes(facility.toLowerCase()));
+      }
+
       res.json({ success: true, data: rooms });
     } catch (err) {
       console.error('Error searching rooms:', err);

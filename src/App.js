@@ -16,6 +16,8 @@ import { useState, useEffect } from 'react';
 import MyBookings from './Components/Booking/MyBookings';
 import Ceklogin from './Components/Login/Login';
 import api from './utils/api';
+import WhatsAppButton from './Components/WhatsAppButton';
+
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(null);
   const [user, setUser] = useState(null);
@@ -103,6 +105,7 @@ function App() {
             />
           </Routes>
           <Footer />
+          <WhatsAppButton phoneNumber="6281312575752" />
         </>
       )}
     </div>

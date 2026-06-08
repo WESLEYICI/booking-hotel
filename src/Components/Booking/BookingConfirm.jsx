@@ -1,16 +1,17 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Modal, ModalBody, ModalHeader } from 'flowbite-react';
+import { Button, Modal, ModalBody, ModalHeader } from 'flowbite-react';
 import { HiOutlineExclamationCircle } from 'react-icons/hi';
 import { FaCheckCircle } from 'react-icons/fa';
 import { RiDiscountPercentFill } from 'react-icons/ri';
-import { Spinner } from 'flowbite-react';
 import api from '../../utils/api';
-
+import { Spinner } from 'flowbite-react';
 export default function Component({ setIsAuthenticated, isAuthenticated, setUser }) {
   const [openModal, setOpenModal] = useState(false);
   const [modalcekdiskon, setModalcekDiskon] = useState(false);
   const [modalDiskon, setModalDiskon] = useState(false);
+  const [cancelModal, setCancelModal] = useState(false);
+  const [pendingSnapToken, setPendingSnapToken] = useState(null);
   const location = useLocation();
   const navigate = useNavigate();
   const [message, setMessage] = useState('');
@@ -23,8 +24,8 @@ export default function Component({ setIsAuthenticated, isAuthenticated, setUser
   const [gatewayError, setGatewayError] = useState('');
   const [snapLoaded, setSnapLoaded] = useState(false);
   const state = location.state || {};
-  const { room_id, name, harga, daysBetween, Checkin, Checkout } = state;
-  const bookingReady = Boolean(room_id && name && harga && daysBetween && Checkin && Checkout);
+  const { name, harga, daysBetween, Checkin, Checkout } = state;
+  const bookingReady = Boolean(name && harga && daysBetween && Checkin && Checkout);
 
   useEffect(() => {
     const validateToken = async () => {
@@ -55,6 +56,7 @@ export default function Component({ setIsAuthenticated, isAuthenticated, setUser
     nama: '',
     email: '',
     phone_number: '',
+    payment_type: 'all',
   });
 
   const handleChange = (e) => {
@@ -65,24 +67,98 @@ export default function Component({ setIsAuthenticated, isAuthenticated, setUser
   const goToMyBookings = () => {
     navigate('/my-bookings', { state: navigateData });
   };
-
   const Cekdiskon = async (e) => {
     e.preventDefault();
+    setError('');
+    setMessage('');
     try {
-      const res = await api.post('/Discount/Cek', { harga, code });
-      setMessage(`Selamat Anda Berhasil Mendapatkan Diskon sebesar %${res.data.diskon}`);
+      const res = await api.post('/vouchers/validate', { harga, code });
+      const data = res.data.data;
+      setMessage(`Selamat Anda Berhasil Mendapatkan Diskon sebesar ${data.diskon}%`);
       setModalcekDiskon(true);
-      setHargaDiskon(res.data);
+      setHargaDiskon(data);
     } catch (err) {
-      setModalcekDiskon(true);
       setError(err.response?.data?.message || 'Gagal Menggunakan Diskon');
+      setModalcekDiskon(true);
       console.log(err.response?.data?.message);
+    }
+  };
+
+  useEffect(() => {
+    if (window.snap) {
+      setSnapLoaded(true);
+      return;
+    }
+
+    const script = document.createElement('script');
+    const isProduction = process.env.REACT_APP_MIDTRANS_IS_PRODUCTION !== 'false';
+    script.src = isProduction
+      ? 'https://app.midtrans.com/snap/snap.js'
+      : 'https://app.sandbox.midtrans.com/snap/snap.js';
+    script.setAttribute('data-client-key', process.env.REACT_APP_MIDTRANS_CLIENT_KEY || 'YOUR_CLIENT_KEY');
+    script.async = true;
+    script.onload = () => setSnapLoaded(true);
+    script.onerror = () => setGatewayError('Gagal memuat Midtrans Snap. Periksa konfigurasi REACT_APP_MIDTRANS_CLIENT_KEY.');
+    document.body.appendChild(script);
+
+    return () => {
+      if (document.body.contains(script)) {
+        document.body.removeChild(script);
+      }
+    };
+  }, []);
+
+  // Generate token baru dari backend dengan payment_type yang dipilih, lalu buka Snap
+  const refreshAndPay = async () => {
+    if (!pendingSnapToken?.bookingData?.booking_id) return;
+    setCancelModal(false);
+    setLoading(true);
+    try {
+      const res = await api.post(`/bookings/${pendingSnapToken.bookingData.booking_id}/refresh-token`, {
+        payment_type: formData.payment_type,
+      });
+      const newToken = res.data.snap_token;
+      setLoading(false);
+      if (!newToken || !window.snap) {
+        setGatewayError('Gagal mendapatkan token pembayaran baru.');
+        return;
+      }
+      // Update pending token dengan yang baru
+      setPendingSnapToken(prev => ({ ...prev, token: newToken }));
+      window.snap.pay(newToken, {
+        onSuccess: () => {
+          setCancelModal(false);
+          setSuccess(true);
+          setNavigateData(pendingSnapToken.bookingData);
+        },
+        onPending: () => {
+          setCancelModal(false);
+          setSuccess(true);
+          setNavigateData(pendingSnapToken.bookingData);
+        },
+        onError: () => {
+          setCancelModal(true);
+        },
+        onClose: () => {
+          setCancelModal(true);
+        },
+      });
+    } catch (err) {
+      setLoading(false);
+      setGatewayError('Gagal memperbarui metode pembayaran: ' + (err.response?.data?.message || err.message));
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    if (!snapLoaded || !window.snap) {
+      setGatewayError('Midtrans Snap belum siap. Tunggu sebentar lalu coba lagi.');
+      return;
+    }
+
     setLoading(true);
+    setGatewayError('');
     const formDataToSend = new FormData();
     formDataToSend.append('room_id', state.room_id);
     formDataToSend.append('nama', formData.nama);
@@ -92,6 +168,10 @@ export default function Component({ setIsAuthenticated, isAuthenticated, setUser
     formDataToSend.append('check_in', state.Checkin);
     formDataToSend.append('check_out', state.Checkout);
     formDataToSend.append('harga', hargaDiskon ? hargaDiskon.harga_setelah_diskon : harga);
+    formDataToSend.append('payment_type', formData.payment_type);
+    if (hargaDiskon && hargaDiskon.code) {
+      formDataToSend.append('voucher_code', hargaDiskon.code);
+    }
 
     try {
       const response = await api.post('/bookings', formDataToSend);
@@ -99,384 +179,380 @@ export default function Component({ setIsAuthenticated, isAuthenticated, setUser
       const payment = response.data.payment;
 
       if (payment?.snap_token && window.snap) {
+        const bookingData = {
+          booking_id: booking.id,
+          nama: formData.nama,
+          email: formData.email,
+          phone_number: formData.phone_number,
+          harga: hargaDiskon ? hargaDiskon.harga_setelah_diskon : harga,
+          name,
+          daysBetween,
+        };
+        // Simpan token agar bisa retry tanpa re-submit form
+        setPendingSnapToken({ token: payment.snap_token, bookingData });
+        setLoading(false);
         window.snap.pay(payment.snap_token, {
-          onSuccess: async (result) => {
-            setLoading(false);
+          onSuccess: () => {
+            setCancelModal(false);
             setSuccess(true);
-            try {
-              await api.patch(`/bookings/${booking.id}/status`, { status: 'confirmed' });
-            } catch (updateErr) {
-              console.error('Gagal auto-confirm:', updateErr);
-            }
-            setNavigateData({
-              booking_id: booking.id,
-              nama: formData.nama,
-              email: formData.email,
-              phone_number: formData.phone_number,
-              harga: hargaDiskon ? hargaDiskon.harga_setelah_diskon : harga,
-              name,
-              daysBetween,
-            });
+            setNavigateData(bookingData);
           },
-          onPending: (result) => {
-            setLoading(false);
+          onPending: () => {
+            setCancelModal(false);
             setSuccess(true);
-            setNavigateData({
-              booking_id: booking.id,
-              nama: formData.nama,
-              email: formData.email,
-              phone_number: formData.phone_number,
-              harga: hargaDiskon ? hargaDiskon.harga_setelah_diskon : harga,
-              name,
-              daysBetween,
-            });
+            setNavigateData(bookingData);
           },
-          onError: (result) => {
-            setLoading(false);
-            alert('Pembayaran gagal. Silakan coba lagi.');
-            console.error('Midtrans error:', result);
+          onError: () => {
+            setCancelModal(true);
           },
           onClose: () => {
-            setLoading(false);
-            alert('Pembayaran dibatalkan. Silakan coba lagi.');
+            // Tampilkan modal — tidak alert biasa
+            setCancelModal(true);
           },
         });
       } else {
         setLoading(false);
-        setSuccess(true);
+        setGatewayError('Token pembayaran tidak diterima dari server.');
       }
     } catch (err) {
       setLoading(false);
-      const errorMessage = err.response?.data?.message || err.message;
-      setGatewayError(errorMessage); // Menampilkan error spesifik dari backend, termasuk jika kamar penuh
-      alert('Gagal membuat booking: ' + errorMessage);
+      alert('Gagal membuat booking: ' + (err.response?.data?.message || err.message));
     }
   };
-
-  const formatPrice = (price) => {
-    return new Intl.NumberFormat('id-ID').format(price);
-  };
-
   if (loading)
     return (
-      <div className="fixed inset-0 flex items-center justify-center bg-hotel-dark/80 backdrop-blur-sm z-50">
-        <div className="flex flex-col items-center gap-4">
-          <Spinner color="info" size="xl" />
-          <p className="text-white/60 text-sm">Processing your booking...</p>
-        </div>
+      <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
+        <Spinner color="info" aria-label="Info spinner example" />
       </div>
     );
 
   if (!bookingReady)
     return (
-      <div className="min-h-screen flex items-center justify-center bg-hotel-cream pt-20">
-        <div className="text-center">
-          <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-hotel-accent/10 flex items-center justify-center">
-            <HiOutlineExclamationCircle className="h-10 w-10 text-hotel-accent" />
-          </div>
-          <p className="text-lg font-semibold text-hotel-primary">Data booking tidak tersedia.</p>
-          <p className="text-hotel-charcoal/50 text-sm mt-2">Silakan kembali ke halaman pemesanan.</p>
-        </div>
+      <div className="h-[100vh] flex items-center justify-center bg-[#FAF7F2]">
+        <p className="text-center text-lg font-semibold">Data booking tidak tersedia. Silakan kembali ke halaman pemesanan.</p>
       </div>
     );
 
   return (
     <>
-      <div className="min-h-screen bg-hotel-cream pt-24 pb-16">
-        <div className="max-w-screen-lg mx-auto px-4 md:px-6">
-          {/* Step Indicator */}
-          <div className="flex items-center justify-center gap-4 mb-12">
-            {['Room Details', 'Confirmation', 'Payment'].map((step, i) => (
-              <div key={step} className="flex items-center gap-3">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${
-                  i <= 1 ? 'bg-hotel-accent text-hotel-primary' : 'bg-gray-200 text-gray-400'
-                }`}>
-                  {i + 1}
+      <div className="h-[170vh] md:h-[120vh] lg:h-[220vh] bg-[#FAF7F2] w-full">
+        <div className="flex flex-col justify-center items-center">
+          <p className="font-bold text-[20px] mt-[20px]">Booking Confirmation</p>
+          <div className="bg-white border flex flex-col justify-center items-center border-gray-300 rounded-lg shadow-lg h-[300px] mt-[30px] w-[350px] mr-[10px] ml-[10px] md:w-[700px] md:ml-[30px] lg:h-[370px] lg:w-[500px]">
+            <p className=" text-[20px] mt-[17px]">Booking Details</p>
+            <p className=" text-[15px] mt-[17px]">
+              Check-in : <span className="font-bold">{Checkin}</span> , from 11:00 am
+            </p>
+            <p className=" text-[15px] mt-[17px]">
+              Check-out :<span className="font-bold">{Checkout}</span> , until 10:00 am
+            </p>
+          </div>
+          <div className="bg-white border flex flex-col justify-center items-center border-gray-300 rounded-lg shadow-lg h-[300px] mt-[30px] w-[350px] mr-[10px] ml-[10px] md:w-[700px] md:ml-[30px] lg:h-[370px] lg:w-[500px]">
+            <p className=" text-[20px] mt-[17px]">Price BreakDown</p>
+            <div className="flex gap-[20px] mt-[20px] ">
+              <p className="text-black">
+                Name <span className="">:</span>
+              </p>
+              <p className="text-black">{name}</p>
+            </div>
+            <div className="flex gap-[150px] mt-[20px] ">
+              <p className="text-black">
+                Nights <span className="ml-[10px]">:</span>
+              </p>
+              <p className="text-black">{daysBetween}</p>
+            </div>
+
+            <div className={`flex ${hargaDiskon ? 'gap-[10px]' : 'gap-[120px]'} mt-[20px]`}>
+              <p className="text-black">
+                Total <span className="ml-[30px]">:</span>
+              </p>
+              {!hargaDiskon ? (
+                <p>Rp. {harga}</p>
+              ) : (
+                <div className="flex gap-2">
+                  <p className="line-through">Rp. {harga}</p>
+                  <p>Rp. {hargaDiskon.harga_setelah_diskon} </p>
                 </div>
-                <span className={`text-sm font-medium hidden md:block ${
-                  i <= 1 ? 'text-hotel-primary' : 'text-gray-400'
-                }`}>
-                  {step}
-                </span>
-                {i < 2 && <div className={`w-12 md:w-20 h-[2px] ${i < 1 ? 'bg-hotel-accent' : 'bg-gray-200'}`} />}
-              </div>
-            ))}
+              )}
+            </div>
           </div>
 
-          <h1 className="font-playfair text-3xl md:text-4xl text-hotel-primary font-bold text-center mb-10">
-            Booking Confirmation
-          </h1>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Left Column: Booking Details & Price */}
-            <div className="space-y-6">
-              {/* Booking Details */}
-              <div className="bg-white rounded-2xl p-6 shadow-card border border-hotel-accent/5">
-                <div className="flex items-center gap-3 mb-5">
-                  <div className="w-10 h-10 rounded-xl bg-hotel-accent/10 flex items-center justify-center">
-                    <svg className="w-5 h-5 text-hotel-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                  </div>
-                  <h3 className="font-playfair text-lg font-semibold text-hotel-primary">Booking Details</h3>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center py-3 border-b border-gray-50">
-                    <span className="text-hotel-charcoal/50 text-sm">Check-in</span>
-                    <span className="text-hotel-primary font-semibold text-sm">{Checkin}, from 11:00 am</span>
-                  </div>
-                  <div className="flex justify-between items-center py-3">
-                    <span className="text-hotel-charcoal/50 text-sm">Check-out</span>
-                    <span className="text-hotel-primary font-semibold text-sm">{Checkout}, until 10:00 am</span>
-                  </div>
-                </div>
+          <div className="bg-white border flex flex-col justify-center items-center border-gray-300 rounded-lg shadow-lg min-h-[400px] mt-[30px] w-[350px] mr-[10px] ml-[10px] md:w-[700px] md:ml-[30px] lg:h-[550px] lg:w-[500px]">
+            <form onSubmit={handleSubmit} className="max-w-sm mx-auto w-full p-4">
+              <div className="mb-5">
+                <label htmlFor="email" className="block mb-2 text-sm font-medium text-gray-900">
+                  Your email
+                </label>
+                <input
+                  type="email"
+                  id="email"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleChange}
+                  className="bg-[#FAF7F2] border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
+                  placeholder="name@gmail.com"
+                  required
+                />
               </div>
-
-              {/* Price Breakdown */}
-              <div className="bg-white rounded-2xl p-6 shadow-card border border-hotel-accent/5">
-                <div className="flex items-center gap-3 mb-5">
-                  <div className="w-10 h-10 rounded-xl bg-hotel-accent/10 flex items-center justify-center">
-                    <svg className="w-5 h-5 text-hotel-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  </div>
-                  <h3 className="font-playfair text-lg font-semibold text-hotel-primary">Price Breakdown</h3>
-                </div>
-
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center py-2">
-                    <span className="text-hotel-charcoal/50 text-sm">Room</span>
-                    <span className="text-hotel-primary text-sm">{name}</span>
-                  </div>
-                  <div className="flex justify-between items-center py-2">
-                    <span className="text-hotel-charcoal/50 text-sm">Duration</span>
-                    <span className="text-hotel-primary text-sm">{daysBetween} Nights</span>
-                  </div>
-                  <div className="h-[1px] bg-gradient-to-r from-transparent via-hotel-accent/20 to-transparent my-2" />
-                  <div className="flex justify-between items-center py-2">
-                    <span className="text-hotel-primary font-semibold">Total</span>
-                    {!hargaDiskon ? (
-                      <span className="font-playfair text-xl font-bold text-hotel-primary">Rp {formatPrice(harga)}</span>
-                    ) : (
-                      <div className="text-right">
-                        <span className="line-through text-hotel-charcoal/30 text-sm block">Rp {formatPrice(harga)}</span>
-                        <span className="font-playfair text-xl font-bold text-hotel-success">Rp {formatPrice(hargaDiskon.harga_setelah_diskon)}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
+              <div className="mb-5">
+                <label htmlFor="text" className="block mb-2 text-sm font-medium text-gray-900">
+                  Your Name
+                </label>
+                <input
+                  type="text"
+                  id="text"
+                  name="nama"
+                  value={formData.nama}
+                  onChange={handleChange}
+                  className="bg-[#FAF7F2] border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
+                  placeholder="name"
+                  required
+                />
               </div>
-            </div>
-
-            {/* Right Column: Guest Form */}
-            <div className="bg-white rounded-2xl p-6 shadow-card border border-hotel-accent/5">
-              <div className="flex items-center gap-3 mb-5">
-                <div className="w-10 h-10 rounded-xl bg-hotel-accent/10 flex items-center justify-center">
-                  <svg className="w-5 h-5 text-hotel-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                  </svg>
-                </div>
-                <h3 className="font-playfair text-lg font-semibold text-hotel-primary">Guest Information</h3>
+              <div className="mb-5">
+                <label htmlFor="number" className="block mb-2 text-sm font-medium text-gray-900">
+                  Phone number
+                </label>
+                <input
+                  type="number"
+                  id="number"
+                  name="phone_number"
+                  value={formData.phone_number}
+                  onChange={handleChange}
+                  className="bg-[#FAF7F2] border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
+                  placeholder="0893156759"
+                  required
+                />
               </div>
+              <div className="mb-5">
+                <label htmlFor="payment_type" className="block mb-2 text-sm font-medium text-gray-900">
+                  Metode Pembayaran
+                </label>
+                <select
+                  id="payment_type"
+                  name="payment_type"
+                  value={formData.payment_type}
+                  onChange={handleChange}
+                  className="bg-[#FAF7F2] border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
+                >
+                  <option value="all">⭐ Tampilkan Semua (Direkomendasikan)</option>
+                  <option value="bank_transfer">Virtual Account (BCA, BNI, Mandiri, dll)</option>
+                  <option value="credit_card">Kartu Kredit / Debit</option>
+                  <option value="gopay">GoPay</option>
+                  <option value="qris">QRIS</option>
+                  <option value="shopeepay">ShopeePay</option>
+                </select>
+                <p className="text-xs text-gray-400 mt-1">💡 Pilih "Tampilkan Semua" agar semua metode tersedia di halaman pembayaran</p>
+              </div>
+              {gatewayError && <p className="text-sm text-red-600 mb-4">{gatewayError}</p>}
 
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                  <label className="block text-hotel-charcoal/60 text-xs font-medium mb-2 uppercase tracking-wider">Email</label>
-                  <input
-                    type="email"
-                    name="email"
-                    value={formData.email}
-                    onChange={handleChange}
-                    className="input-premium w-full text-sm"
-                    placeholder="name@gmail.com"
-                    required
-                  />
+              {!hargaDiskon ? (
+                <p className="mt-[20px] font-semibold">Total: Rp. {harga}</p>
+              ) : (
+                <div className="flex gap-2 mt-[20px]">
+                  <p className="line-through">Rp. {harga}</p>
+                  <p className="font-semibold">Rp. {hargaDiskon.harga_setelah_diskon}</p>
                 </div>
-                <div>
-                  <label className="block text-hotel-charcoal/60 text-xs font-medium mb-2 uppercase tracking-wider">Full Name</label>
-                  <input
-                    type="text"
-                    name="nama"
-                    value={formData.nama}
-                    onChange={handleChange}
-                    className="input-premium w-full text-sm"
-                    placeholder="Your full name"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-hotel-charcoal/60 text-xs font-medium mb-2 uppercase tracking-wider">Phone Number</label>
-                  <input
-                    type="number"
-                    name="phone_number"
-                    value={formData.phone_number}
-                    onChange={handleChange}
-                    className="input-premium w-full text-sm"
-                    placeholder="081234567890"
-                    required
-                  />
-                </div>
-                {gatewayError && <p className="text-sm text-hotel-danger">{gatewayError}</p>}
+              )}
 
-                {/* Total */}
-                <div className="bg-hotel-accent/5 rounded-xl p-4 border border-hotel-accent/10">
-                  <div className="flex justify-between items-center">
-                    <span className="text-hotel-primary font-medium text-sm">Total Payment</span>
-                    {!hargaDiskon ? (
-                      <span className="font-playfair text-lg font-bold text-hotel-primary">Rp {formatPrice(harga)}</span>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        <span className="line-through text-hotel-charcoal/30 text-sm">Rp {formatPrice(harga)}</span>
-                        <span className="font-playfair text-lg font-bold text-hotel-success">Rp {formatPrice(hargaDiskon.harga_setelah_diskon)}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Actions */}
-                <div className="flex flex-col sm:flex-row gap-3 pt-2">
-                  <button
-                    type={isAuthenticated ? 'submit' : 'button'}
-                    onClick={isAuthenticated ? undefined : Toggler}
-                    className="flex-1 btn-gold shimmer-btn py-3 rounded-xl text-sm font-semibold tracking-wider uppercase"
-                  >
-                    Book Now
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setModalDiskon(true)}
-                    className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold border-2 border-hotel-accent/30 text-hotel-primary hover:bg-hotel-accent/5 transition-all duration-300"
-                  >
-                    <RiDiscountPercentFill className="text-hotel-accent" />
-                    Discount
-                  </button>
-                </div>
-              </form>
-            </div>
+              <div className="flex flex-col md:flex-row gap-2 mt-[20px] mb-5">
+                <button
+                  type={`${isAuthenticated ? 'submit' : 'button'}`}
+                  onClick={isAuthenticated ? undefined : Toggler}
+                  className="text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 font-medium rounded-lg text-sm px-5 py-2.5 dark:bg-blue-600 dark:hover:bg-blue-700 focus:outline-none dark:focus:ring-blue-800 w-full md:w-[200px]"
+                >
+                  BOOK NOW
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setModalDiskon(true)}
+                  className="text-black bg-white flex gap-4 hover:bg-black hover:text-white border border-black hover:border-white focus:ring-4 focus:ring-blue-300 font-medium rounded-lg text-sm px-5 py-2.5 focus:outline-none w-full md:w-[200px] justify-center"
+                >
+                  <RiDiscountPercentFill className="text-[20px]" />
+                  Discount
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       </div>
-
-      {/* Discount Modal */}
       <Modal show={modalDiskon} onClose={() => setModalDiskon(false)}>
-        <ModalHeader className="bg-white rounded-t-xl">
-          <span className="text-hotel-primary font-playfair font-semibold">Apply Discount Code</span>
+        <ModalHeader className="bg-white">
+          <p className="text-black">Discount</p>
         </ModalHeader>
-        <ModalBody className="bg-white rounded-b-xl">
-          <form onSubmit={Cekdiskon} className="space-y-4">
-            <input
-              type="text"
-              name="code"
-              value={code}
-              onChange={(e) => setCode(e.target.value.toUpperCase())}
-              className={`input-premium w-full text-sm ${hargaDiskon ? 'opacity-50 cursor-not-allowed' : ''}`}
-              placeholder="Enter discount code"
-              disabled={hargaDiskon}
-              required={!hargaDiskon}
-            />
-            <div className="bg-hotel-accent/5 rounded-xl p-4 border border-hotel-accent/10">
+        <ModalBody className="bg-white">
+          <form onSubmit={Cekdiskon}>
+            <div className="space-y-6">
+              <input
+                type="text"
+                id="text"
+                name="code"
+                value={code}
+                onChange={(e) => setCode(e.target.value.toUpperCase())}
+                className={`bg-[#FAF7F2] border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 ${hargaDiskon ? 'cursor-not-allowed' : ''}`}
+                placeholder="name"
+                disabled={hargaDiskon}
+                required={!hargaDiskon}
+              />
+            </div>
+            <div className="my-[20px]">
               {!hargaDiskon ? (
-                <p className="text-hotel-primary font-semibold">Rp {formatPrice(harga)}</p>
+                <p>Rp. {harga}</p>
               ) : (
-                <div className="flex items-center gap-3">
-                  <p className="line-through text-hotel-charcoal/30">Rp {formatPrice(harga)}</p>
-                  <p className="text-hotel-success font-bold">Rp {formatPrice(hargaDiskon.harga_setelah_diskon)}</p>
+                <div className="flex gap-2">
+                  <p className="line-through">Rp. {harga}</p>
+                  <p>Rp. {hargaDiskon.harga_setelah_diskon} </p>
                 </div>
               )}
             </div>
-            <div className="flex gap-3">
+
+            <button
+              type="submit"
+              className="text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 font-medium rounded-lg text-sm px-5 py-2.5 me-2 mb-2 dark:bg-blue-600 dark:hover:bg-blue-700 focus:outline-none dark:focus:ring-blue-800"
+            >
+              cek
+            </button>
+            {hargaDiskon ? (
               <button
-                type="submit"
-                className="btn-gold px-6 py-2.5 rounded-xl text-sm font-semibold"
+                type="button"
+                onClick={() => setModalDiskon(false)}
+                className="text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 font-medium rounded-lg text-sm px-5 py-2.5 me-2 mb-2 dark:bg-blue-600 dark:hover:bg-blue-700 focus:outline-none dark:focus:ring-blue-800"
               >
-                Check
+                Gunakan
               </button>
-              {hargaDiskon && (
-                <button
-                  type="button"
-                  onClick={() => setModalDiskon(false)}
-                  className="bg-hotel-success text-white px-6 py-2.5 rounded-xl text-sm font-semibold hover:bg-green-600 transition-all"
-                >
-                  Apply
-                </button>
-              )}
-            </div>
+            ) : (
+              ''
+            )}
           </form>
         </ModalBody>
       </Modal>
-
-      {/* Login Required Modal */}
+      {/* modal jika belum login */}
       <Modal show={openModal} size="md" onClose={() => setOpenModal(false)} popup>
-        <ModalHeader className="bg-white rounded-t-xl" />
-        <ModalBody className="bg-white rounded-b-xl">
-          <div className="text-center py-4">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-hotel-accent/10 flex items-center justify-center">
-              <HiOutlineExclamationCircle className="h-8 w-8 text-hotel-accent" />
+        <ModalHeader className="bg-white" />
+        <ModalBody className="bg-white">
+          <div className="text-center">
+            <HiOutlineExclamationCircle className="mx-auto mb-4 h-14 w-14 text-red-400 " />
+            <h3 className="mb-5 text-lg font-normal text-black">Untuk memesan hotel, Anda harus login terlebih dahulu</h3>
+            <div className="flex bg-green-400 justify-center gap-4">
+              <Button color="failure" className="w-full" onClick={() => setOpenModal(false)}>
+                {'Oke'}
+              </Button>
             </div>
-            <h3 className="mb-5 text-lg font-semibold text-hotel-primary">
-              Untuk memesan hotel, Anda harus login terlebih dahulu
-            </h3>
-            <button
-              onClick={() => setOpenModal(false)}
-              className="w-full px-6 py-2.5 rounded-xl bg-hotel-accent text-hotel-primary text-sm font-semibold hover:bg-hotel-accent-light transition-all duration-300"
-            >
-              OK
-            </button>
           </div>
         </ModalBody>
       </Modal>
-
-      {/* Success Modal */}
       <Modal show={success} size="md" onClose={() => setSuccess(false)} popup>
-        <ModalHeader className="bg-white rounded-t-xl" />
-        <ModalBody className="bg-white rounded-b-xl">
-          <div className="text-center py-4">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-green-50 flex items-center justify-center">
-              <FaCheckCircle className="h-8 w-8 text-hotel-success" />
+        <ModalHeader className="bg-white" />
+        <ModalBody className="bg-white">
+          <div className="text-center">
+            <FaCheckCircle className="mx-auto mb-4 h-14 w-14 text-green-400 " />
+            <h3 className="mb-5 text-lg font-normal text-black">Booking Berhasil Silahkan melanjutkan pembayaran dihalaman mybookings</h3>
+            <div className="flex bg-green-400 justify-center gap-4">
+              <Button
+                color="failure"
+                onClick={() => {
+                  setSuccess(false);
+                  goToMyBookings();
+                }}
+              >
+                {'oke'}
+              </Button>
             </div>
-            <h3 className="mb-5 text-lg font-semibold text-hotel-primary">
-              Booking Berhasil! Silahkan lanjutkan pembayaran di halaman My Bookings
-            </h3>
-            <button
-              onClick={() => {
-                setSuccess(false);
-                goToMyBookings();
-              }}
-              className="w-full px-6 py-2.5 rounded-xl bg-hotel-success text-white text-sm font-semibold hover:bg-green-600 transition-all duration-300"
-            >
-              Go to My Bookings
-            </button>
           </div>
         </ModalBody>
       </Modal>
-
-      {/* Discount Check Modal */}
+      {/* Modal: Pembayaran Dibatalkan / Ganti Metode */}
+      {cancelModal && (
+        <div className="fixed inset-0 flex items-center justify-center bg-hotel-dark/70 backdrop-blur-sm z-[9999]">
+          <div className="relative w-full max-w-md mx-4 bg-white rounded-2xl shadow-premium animate-scale-in overflow-hidden">
+            {/* Header */}
+            <div className="px-6 py-5 border-b border-gray-100 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center flex-shrink-0">
+                <svg className="w-5 h-5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="font-playfair text-base font-semibold text-hotel-primary">Pembayaran Dibatalkan</h3>
+                <p className="text-xs text-hotel-charcoal/40 mt-0.5">Anda menutup halaman pembayaran</p>
+              </div>
+            </div>
+            {/* Body */}
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-hotel-charcoal/70 leading-relaxed">
+                Booking Anda sudah tersimpan dengan status{' '}
+                <strong className="text-amber-600">Pending</strong>. Ganti metode pembayaran jika perlu, lalu coba bayar lagi.
+              </p>
+              {/* Dropdown ganti metode */}
+              <div className="bg-hotel-cream rounded-xl p-4 space-y-2">
+                <p className="text-xs font-semibold text-hotel-primary uppercase tracking-wider">Ganti Metode Pembayaran</p>
+                <select
+                  value={formData.payment_type}
+                  onChange={(e) => setFormData({ ...formData, payment_type: e.target.value })}
+                  className="w-full bg-white border border-gray-200 text-hotel-charcoal text-sm rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-hotel-accent/30 focus:border-hotel-accent outline-none"
+                >
+                  <option value="all">Tampilkan Semua (Midtrans)</option>
+                  <option value="bank_transfer">Virtual Account (BCA, BNI, Mandiri, dll)</option>
+                  <option value="gopay">GoPay</option>
+                  <option value="qris">QRIS</option>
+                  <option value="shopeepay">ShopeePay</option>
+                  <option value="credit_card">Kartu Kredit / Debit</option>
+                </select>
+              </div>
+            </div>
+            {/* Footer */}
+            <div className="px-6 pb-6 flex flex-col sm:flex-row gap-3">
+              {pendingSnapToken && (
+                <button
+                  onClick={refreshAndPay}
+                  className="flex-1 btn-gold px-5 py-2.5 rounded-xl text-sm font-semibold text-center"
+                >
+                  🔄 Coba Bayar Lagi
+                </button>
+              )}
+              <button
+                onClick={() => {
+                  setCancelModal(false);
+                  navigate('/my-bookings');
+                }}
+                className="flex-1 px-5 py-2.5 rounded-xl border border-gray-200 text-hotel-charcoal/70 text-sm font-medium hover:bg-gray-50 transition-colors text-center"
+              >
+                Bayar Nanti di My Bookings
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <Modal show={modalcekdiskon} size="md" onClose={() => setModalcekDiskon(false)} popup>
-        <ModalHeader className="bg-white rounded-t-xl" />
-        <ModalBody className="bg-white rounded-b-xl">
-          <div className="text-center py-4">
+        <ModalHeader className="bg-white" />
+        <ModalBody className="bg-white">
+          <div className="text-center">
             {error && !message ? (
               <>
-                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-red-50 flex items-center justify-center">
-                  <HiOutlineExclamationCircle className="h-8 w-8 text-hotel-danger" />
-                </div>
-                <h3 className="mb-5 text-lg font-semibold text-hotel-primary">{error}</h3>
+                <HiOutlineExclamationCircle className="mx-auto mb-4 h-14 w-14 text-red-400 " />
+                <h3 className="mb-5 text-lg font-normal text-black">{error}</h3>
+              </>
+            ) : message && !error ? (
+              <>
+                <FaCheckCircle className="mx-auto mb-4 h-14 w-14 text-green-400 " />
+                <h3 className="mb-5 text-lg font-normal text-black">{message}</h3>
               </>
             ) : (
               <>
-                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-green-50 flex items-center justify-center">
-                  <FaCheckCircle className="h-8 w-8 text-hotel-success" />
-                </div>
-                <h3 className="mb-5 text-lg font-semibold text-hotel-primary">{message}</h3>
+                <FaCheckCircle className="mx-auto mb-4 h-14 w-14 text-green-400 " />
+                <h3 className="mb-5 text-lg font-normal text-black">{message}</h3>
               </>
             )}
-            <button
-              onClick={() => setModalcekDiskon(false)}
-              className="w-full px-6 py-2.5 rounded-xl bg-hotel-accent text-hotel-primary text-sm font-semibold hover:bg-hotel-accent-light transition-all duration-300"
-            >
-              OK
-            </button>
+            <div className="flex bg-green-400 justify-center gap-4">
+              <Button
+                color="failure"
+                onClick={() => {
+                  setModalcekDiskon(false);
+                }}
+              >
+                {'oke'}
+              </Button>
+            </div>
           </div>
         </ModalBody>
       </Modal>

@@ -17,7 +17,7 @@ const DataRooms = () => {
 
   const [editingRoom, setEditingRoom] = useState(null);
   const [formData, setFormData] = useState({
-    name: '', price: '', capacity: '', size: '', facility: '', description: '', amenities: '',
+    name: '', price: '', capacity: '', size: '', facility: '', description: '', amenities: '', total_units: '1',
   });
 
   // File states
@@ -63,7 +63,7 @@ const DataRooms = () => {
   };
 
   const resetForm = () => {
-    setFormData({ name: '', price: '', capacity: '', size: '', facility: '', description: '', amenities: '' });
+    setFormData({ name: '', price: '', capacity: '', size: '', facility: '', description: '', amenities: '', total_units: '1' });
     setImageFile(null);
     setImage2File(null);
     setImagePreview('');
@@ -86,6 +86,7 @@ const DataRooms = () => {
       facility: room.facility,
       description: room.description,
       amenities: room.amenities,
+      total_units: room.total_units || 1,
     });
     setImageFile(null);
     setImage2File(null);
@@ -180,6 +181,7 @@ const DataRooms = () => {
                 <th className="text-left">Nama</th>
                 <th className="text-left">Harga/Malam</th>
                 <th className="text-left">Kapasitas</th>
+                <th className="text-left">Unit</th>
                 <th className="text-left">Fasilitas</th>
                 <th className="text-left">Status</th>
                 <th className="text-left">Aksi</th>
@@ -206,17 +208,25 @@ const DataRooms = () => {
                   <td className="text-hotel-charcoal/70 font-medium">{room.name}</td>
                   <td className="text-hotel-primary font-semibold">Rp {formatPrice(room.price)}</td>
                   <td className="text-hotel-charcoal/70">{room.capacity} Tamu</td>
+                  <td>
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-hotel-primary font-semibold text-xs">{room.total_units || 1} unit</span>
+                      <span className="text-hotel-charcoal/40 text-[10px]">
+                        {room.available_units !== undefined ? `${room.available_units} tersedia` : ''}
+                      </span>
+                    </div>
+                  </td>
                   <td className="text-hotel-charcoal/70 capitalize">{room.facility}</td>
                   <td>
                     {room.is_available === false || room.is_available === 0 ? (
                       <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-600 border border-red-100">
                         <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block"></span>
-                        Penuh
+                        Sold Out
                       </span>
                     ) : (
                       <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-green-50 text-green-700 border border-green-100">
                         <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block"></span>
-                        Tersedia
+                        {room.available_units > 0 ? `${room.available_units} Tersedia` : 'Tersedia'}
                       </span>
                     )}
                   </td>
@@ -258,12 +268,35 @@ const DataRooms = () => {
                 <input type="number" name="capacity" value={formData.capacity} onChange={handleChange} className="input-premium w-full text-sm" required />
               </div>
               <div>
+                <label className="block text-hotel-charcoal/60 text-xs font-medium mb-1">
+                  Jumlah Unit <span className="text-hotel-charcoal/30 font-normal">(berapa kamar tipe ini tersedia)</span>
+                </label>
+                <input
+                  type="number"
+                  name="total_units"
+                  value={formData.total_units}
+                  onChange={handleChange}
+                  min="1"
+                  max="20"
+                  className="input-premium w-full text-sm"
+                  required
+                />
+                <p className="text-xs text-hotel-charcoal/30 mt-1">Misal: tipe ini punya 2 kamar fisik → isi 2</p>
+              </div>
+              <div>
                 <label className="block text-hotel-charcoal/60 text-xs font-medium mb-1">Ukuran (misal: 30 M²)</label>
                 <input type="text" name="size" value={formData.size} onChange={handleChange} className="input-premium w-full text-sm" required />
               </div>
               <div>
                 <label className="block text-hotel-charcoal/60 text-xs font-medium mb-1">Fasilitas Utama / View</label>
-                <input type="text" name="facility" value={formData.facility} onChange={handleChange} className="input-premium w-full text-sm" required />
+                <select name="facility" value={formData.facility} onChange={handleChange} className="input-premium w-full text-sm" required>
+                  <option value="" disabled>Pilih Tipe / View</option>
+                  <option value="beach">Beach / Pantai</option>
+                  <option value="seaside">Seaside</option>
+                  <option value="swimming pool">Swimming Pool</option>
+                  <option value="sea view">Sea View</option>
+                  <option value="city view">City View</option>
+                </select>
               </div>
               <div className="md:col-span-2">
                 <label className="block text-hotel-charcoal/60 text-xs font-medium mb-1">Deskripsi</label>

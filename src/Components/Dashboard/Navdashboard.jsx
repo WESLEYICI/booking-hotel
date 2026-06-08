@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FaHome, FaAddressBook, FaMoneyCheckAlt, FaUsers, FaBed } from 'react-icons/fa';
+import { FaHome, FaAddressBook, FaMoneyCheckAlt, FaUsers, FaBed, FaStar } from 'react-icons/fa';
 import { BiSolidDiscount } from 'react-icons/bi';
 import { FiMenu, FiX } from 'react-icons/fi';
 import { Link, useLocation } from 'react-router-dom';
@@ -15,6 +15,7 @@ const Navdashboard = () => {
     { to: '/dashboard/Databookings', label: 'Bookings', icon: FaAddressBook },
     { to: '/dashboard/DataPayments', label: 'Payments', icon: FaMoneyCheckAlt },
     { to: '/dashboard/Discount', label: 'Vouchers', icon: BiSolidDiscount },
+    { to: '/dashboard/Reviews', label: 'Ulasan Tamu', icon: FaStar },
   ];
 
   const isActive = (path) => {

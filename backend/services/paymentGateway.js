@@ -20,9 +20,23 @@ function getBasicAuth() {
   return Buffer.from(`${serverKey}:`).toString('base64');
 }
 
+const BANK_NAMES = {
+  bca: 'BCA',
+  mandiri: 'Mandiri',
+  bni: 'BNI',
+  bri: 'BRI',
+};
+
 function normalizePaymentType(paymentType) {
+  if (!paymentType || paymentType === 'all') {
+    return 'Midtrans Snap';
+  }
+  if (BANK_NAMES[paymentType]) {
+    return `Bank Transfer ${BANK_NAMES[paymentType]}`;
+  }
   const mapping = {
     bank_transfer: 'Bank Transfer',
+    qris: 'QRIS',
     gopay: 'GoPay',
     shopeepay: 'ShopeePay',
     credit_card: 'Credit Card',
@@ -31,13 +45,20 @@ function normalizePaymentType(paymentType) {
 }
 
 function buildEnabledPayments(paymentType) {
+  if (!paymentType || paymentType === 'all') {
+    return [];
+  }
+  if (BANK_NAMES[paymentType]) {
+    return [paymentType];
+  }
   const mapping = {
-    bank_transfer: ['bank_transfer'],
+    bank_transfer: ['bca_va', 'bni_va', 'bri_va', 'echannel', 'permata_va', 'other_va'],
+    qris: ['qris'],
     gopay: ['gopay'],
     shopeepay: ['shopeepay'],
     credit_card: ['credit_card'],
   };
-  return mapping[paymentType] || ['bank_transfer', 'gopay', 'shopeepay', 'credit_card'];
+  return mapping[paymentType] || [];
 }
 
 function requestMidtrans(payload) {
@@ -89,9 +110,9 @@ async function createPaymentSession({ booking_id, amount, payment_type, customer
       gross_amount: Number(amount),
     },
     customer_details: {
-      first_name: customer.nama || customer.name || 'Guest',
-      email: customer.email,
-      phone: customer.phone_number || customer.phone || '081234567890',
+      first_name: customer?.nama || customer?.name || 'Guest',
+      email: customer?.email || 'guest@example.com',
+      phone: customer?.phone_number || customer?.phone || '081234567890',
     },
     item_details: [
       {
@@ -105,9 +126,10 @@ async function createPaymentSession({ booking_id, amount, payment_type, customer
       secure: true,
     },
   };
-  const serverKey = process.env.MIDTRANS_SERVER_KEY;
-  if (!serverKey || serverKey.includes('YOUR_SERVER_KEY')) {
-    throw new Error('Midtrans Server Key belum dikonfigurasi. Silakan isi di .env backend');
+
+  const enabled = buildEnabledPayments(payment_type);
+  if (payment_type !== 'all' && enabled.length > 0) {
+    snapPayload.enabled_payments = enabled;
   }
 
   const midtransResponse = await requestMidtrans(snapPayload);
@@ -129,6 +151,45 @@ async function createPaymentSession({ booking_id, amount, payment_type, customer
   };
 }
 
+// Hanya panggil Midtrans API dan kembalikan token, tanpa INSERT ke DB
+// Digunakan oleh refreshPaymentToken yang melakukan UPDATE sendiri
+async function createSnapToken({ booking_id, order_id, amount, payment_type, customer, item_name }) {
+  const snapPayload = {
+    transaction_details: {
+      order_id,
+      gross_amount: Number(amount),
+    },
+    customer_details: {
+      first_name: customer?.nama || customer?.name || 'Guest',
+      email: customer?.email || 'guest@example.com',
+      phone: customer?.phone_number || customer?.phone || '081234567890',
+    },
+    item_details: [
+      {
+        id: order_id,
+        price: Number(amount),
+        quantity: 1,
+        name: item_name || 'Hotel Booking',
+      },
+    ],
+    credit_card: {
+      secure: true,
+    },
+  };
+
+  const enabled = buildEnabledPayments(payment_type);
+  if (payment_type && payment_type !== 'all' && enabled.length > 0) {
+    snapPayload.enabled_payments = enabled;
+  }
+
+  const midtransResponse = await requestMidtrans(snapPayload);
+  return {
+    snap_token: midtransResponse.token,
+    redirect_url: midtransResponse.redirect_url,
+  };
+}
+
 module.exports = {
   createPaymentSession,
+  createSnapToken,
 };

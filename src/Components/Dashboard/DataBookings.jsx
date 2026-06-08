@@ -51,12 +51,12 @@ const DataBookings = () => {
   const Toggler = () => setOpen(!open);
 
   const handleStatusChange = async (id, newStatus) => {
-    // Guard di frontend: blokir jika coba confirm tapi belum bayar
+    // Konfirmasi manual jika belum lunas via Midtrans
     if (newStatus === 'confirmed' && !hasPaid(id)) {
-      setMsg('');
-      setError('Tidak dapat mengkonfirmasi. User belum melakukan pembayaran!');
-      setOpen(true);
-      return;
+      const confirmManual = window.confirm(
+        'User ini belum lunas di sistem Midtrans. Apakah Anda yakin ingin mengkonfirmasi manual (misal: bayar tunai/transfer langsung)?'
+      );
+      if (!confirmManual) return;
     }
 
     try {
@@ -95,6 +95,7 @@ const DataBookings = () => {
   const getStatusBadge = (status) => {
     const styles = {
       confirmed: 'badge badge-success',
+      completed: 'badge bg-blue-100 text-blue-700',
       cancelled: 'badge badge-danger',
       pending: 'badge badge-warning',
     };
@@ -133,8 +134,7 @@ const DataBookings = () => {
         <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
           <MdLockOutline className="text-amber-500 text-lg flex-shrink-0 mt-0.5" />
           <p className="text-amber-700 text-xs leading-relaxed">
-            Status booking hanya bisa diubah ke <strong>Confirmed</strong> jika user sudah melakukan pembayaran (status Lunas). 
-            Jika belum bayar, pilihan Confirm akan diblokir secara otomatis.
+            Admin sekarang dapat <strong>mengkonfirmasi manual</strong> pemesanan meskipun status di Midtrans belum lunas (berguna jika user membayar menggunakan uang tunai atau transfer manual).
           </p>
         </div>
 
@@ -174,17 +174,14 @@ const DataBookings = () => {
                             className="input-premium text-xs py-1.5 px-3 pr-8"
                           >
                             <option value="pending">Pending</option>
-                            <option value="confirmed" disabled={!paid}>
-                              {paid ? 'Confirm' : 'Confirm (Belum Bayar)'}
+                            <option value="confirmed">
+                              {paid ? 'Confirm' : 'Confirm (Manual)'}
                             </option>
+                            {(book.status === 'confirmed' || book.status === 'completed') && (
+                              <option value="completed">Completed (Selesai)</option>
+                            )}
                             <option value="cancelled">Cancel</option>
                           </select>
-                          {/* Lock indicator jika belum bayar */}
-                          {!paid && (
-                            <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-amber-400 flex items-center justify-center" title="User belum membayar">
-                              <MdLockOutline className="text-white text-[10px]" />
-                            </div>
-                          )}
                         </div>
                       </td>
                       <td>

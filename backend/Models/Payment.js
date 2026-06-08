@@ -25,20 +25,16 @@ class Payment {
     const [rows] = await db.query('SELECT * FROM payments ORDER BY created_at DESC');
     return rows;
   }
-
-  static async findByOrderId(orderId) {
-    const [rows] = await db.query('SELECT * FROM payments WHERE order_id = ?', [orderId]);
-    return rows[0];
-  }
-
-  static async updateStatus(orderId, transactionStatus) {
-    const [result] = await db.query('UPDATE payments SET transaction_status = ? WHERE order_id = ?', [transactionStatus, orderId]);
-    return result;
-  }
-
-  static async findByBookingId(bookingId) {
-    const [rows] = await db.query('SELECT * FROM payments WHERE booking_id = ?', [bookingId]);
-    return rows;
+  // Update snap_token pada payment terakhir milik booking (jangan insert baru)
+  static async updateByBookingId(bookingId, { order_id, snap_token, redirect_url, payment_type }) {
+    await db.query(
+      `UPDATE payments 
+       SET order_id = ?, snap_token = ?, redirect_url = ?, payment_type = COALESCE(?, payment_type)
+       WHERE booking_id = ?
+       ORDER BY id DESC
+       LIMIT 1`,
+      [order_id, snap_token, redirect_url, payment_type, bookingId]
+    );
   }
 }
 

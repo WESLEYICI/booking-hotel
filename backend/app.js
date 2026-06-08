@@ -5,6 +5,8 @@ const authRoutes = require('./routes/authRoutes');
 const userRoutes = require('./routes/userRoutes');
 const bookingRoutes = require('./routes/bookingRoutes');
 const roomRoutes = require('./routes/roomRoutes');
+const voucherRoutes = require('./routes/voucherRoutes');
+const reviewRoutes = require('./routes/reviewRoutes');
 const app = express();
 const path = require('path');
 app.use(
@@ -30,6 +32,9 @@ app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/rooms', roomRoutes);
+app.use('/api/vouchers', voucherRoutes);
+app.use('/api/reviews', reviewRoutes);
+app.use('/api/Discount', voucherRoutes); // backward-compat dengan endpoint lama di frontend
 // Error handling
 app.use((err, req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);

@@ -6,6 +6,7 @@ import DataBookings from './DataBookings';
 import Databoard from './Databoard';
 import DataRooms from './DataRooms';
 import DataDiscount from './DataDiscount';
+import DataReviews from './DataReviews';
 import { Route, Routes, Navigate } from 'react-router-dom';
 
 const Dashboard = () => {
@@ -18,6 +19,7 @@ const Dashboard = () => {
           <Route path="Userlist" element={<UserList />} />
           <Route path="Rooms" element={<DataRooms />} />
           <Route path="Discount" element={<DataDiscount />} />
+          <Route path="Reviews" element={<DataReviews />} />
           <Route path="Databookings" element={<DataBookings />} />
           <Route path="DataPayments" element={<DataPayments />} />
         </Routes>

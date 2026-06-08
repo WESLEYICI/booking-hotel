@@ -7,16 +7,18 @@ class Booking {
       `INSERT INTO bookings 
        (user_id, room_id, name, nama, email, phone_number, check_in, check_out, harga, status, payment_proof) 
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [user_id, room_id, name, nama, email, phone_number, check_in, check_out, harga, status, payment_proof]
+      [user_id, room_id || null, name, nama, email, phone_number, check_in, check_out, harga, status, payment_proof]
     );
     return { id: result.insertId, ...bookingData };
   }
 
   static async findByUserId(userId) {
     const [rows] = await db.query(
-      `SELECT b.*, p.order_id, p.transaction_status, p.payment_type, p.transaction_time
+      `SELECT b.*, p.order_id, p.transaction_status, p.payment_type, p.transaction_time, p.snap_token
        FROM bookings b
-       LEFT JOIN payments p ON p.booking_id = b.id
+       LEFT JOIN payments p ON p.id = (
+         SELECT MAX(id) FROM payments WHERE booking_id = b.id
+       )
        WHERE b.user_id = ?
        ORDER BY b.created_at DESC`,
       [userId]

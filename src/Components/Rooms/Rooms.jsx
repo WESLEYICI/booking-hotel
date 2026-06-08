@@ -9,14 +9,31 @@ const RoomsAndSuites = ({ handlerooms, searchCriteria }) => {
   const Navigate = useNavigate();
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);
+  
+  // Filter States
+  const [filterMaxPrice, setFilterMaxPrice] = useState('');
+  const [filterFacility, setFilterFacility] = useState('');
 
   useEffect(() => {
     const fetchRooms = async () => {
       setLoading(true);
       try {
         let endpoint = '/rooms';
+        const params = new URLSearchParams();
+
         if (searchCriteria && searchCriteria.checkIn && searchCriteria.checkOut) {
-          endpoint = `/rooms/available?checkIn=${searchCriteria.checkIn}&checkOut=${searchCriteria.checkOut}&guests=${searchCriteria.guests}`;
+          endpoint = '/rooms/available';
+          params.append('checkIn', searchCriteria.checkIn);
+          params.append('checkOut', searchCriteria.checkOut);
+          params.append('guests', searchCriteria.guests);
+        }
+
+        if (filterMaxPrice) params.append('maxPrice', filterMaxPrice);
+        if (filterFacility) params.append('facility', filterFacility);
+
+        const queryString = params.toString();
+        if (queryString) {
+          endpoint += `?${queryString}`;
         }
         
         const res = await api.get(endpoint);
@@ -30,7 +47,7 @@ const RoomsAndSuites = ({ handlerooms, searchCriteria }) => {
       }
     };
     fetchRooms();
-  }, [searchCriteria]);
+  }, [searchCriteria, filterMaxPrice, filterFacility]);
 
   const handleClick = (room) => {
     Navigate('/BookingRoom', {
@@ -74,6 +91,54 @@ const RoomsAndSuites = ({ handlerooms, searchCriteria }) => {
           </p>
         </div>
 
+        {/* Filter Bar */}
+        <div className="bg-white rounded-2xl p-6 shadow-card mb-12 border border-hotel-accent/5">
+          <div className="flex flex-col md:flex-row gap-6 items-end">
+            <div className="w-full md:w-1/2">
+              <label className="block text-hotel-charcoal/60 text-xs font-medium mb-2 uppercase tracking-wider">
+                Maksimal Harga
+              </label>
+              <select
+                value={filterMaxPrice}
+                onChange={(e) => setFilterMaxPrice(e.target.value)}
+                className="input-premium w-full text-sm"
+              >
+                <option value="">Semua Harga</option>
+                <option value="500000">Di bawah Rp 500.000</option>
+                <option value="1000000">Di bawah Rp 1.000.000</option>
+                <option value="2000000">Di bawah Rp 2.000.000</option>
+              </select>
+            </div>
+            
+            <div className="w-full md:w-1/2">
+              <label className="block text-hotel-charcoal/60 text-xs font-medium mb-2 uppercase tracking-wider">
+                Tipe Fasilitas / View
+              </label>
+              <select
+                value={filterFacility}
+                onChange={(e) => setFilterFacility(e.target.value)}
+                className="input-premium w-full text-sm"
+              >
+                <option value="">Semua Tipe</option>
+                <option value="beach">Beach / Pantai</option>
+                <option value="seaside">Seaside</option>
+                <option value="swimming pool">Swimming Pool</option>
+                <option value="sea view">Sea View</option>
+                <option value="city view">City View</option>
+              </select>
+            </div>
+            
+            <div className="w-full md:w-auto">
+              <button
+                onClick={() => { setFilterMaxPrice(''); setFilterFacility(''); }}
+                className="w-full px-6 py-3 rounded-xl border border-hotel-accent text-hotel-accent hover:bg-hotel-accent hover:text-white transition-all text-sm font-semibold uppercase tracking-wider"
+              >
+                Reset
+              </button>
+            </div>
+          </div>
+        </div>
+
         {loading ? (
           <div className="flex justify-center items-center h-40">
             <div className="w-10 h-10 border-4 border-hotel-accent border-t-transparent rounded-full animate-spin"></div>
@@ -92,14 +157,15 @@ const RoomsAndSuites = ({ handlerooms, searchCriteria }) => {
                     src={room.image_url}
                     alt={room.name}
                     className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                    onError={(e) => { e.target.src = 'https://via.placeholder.com/400x300?text=No+Image'; }}
                   />
                   {/* Overlay on hover */}
                   <div className={`absolute inset-0 flex items-end p-5 transition-all duration-500 ${
-                    room.is_available === 0 
+                    room.is_available === 0 || room.is_available === false
                       ? 'bg-hotel-dark/60 opacity-100' 
                       : 'bg-gradient-to-t from-hotel-primary/80 to-transparent opacity-0 group-hover:opacity-100'
                   }`}>
-                    {room.is_available === 0 ? (
+                    {room.is_available === 0 || room.is_available === false ? (
                       <div className="w-full text-center mb-4">
                         <span className="bg-hotel-danger text-white px-4 py-2 rounded-full text-xs font-bold tracking-wider uppercase shadow-lg">
                           Sold Out
@@ -119,14 +185,28 @@ const RoomsAndSuites = ({ handlerooms, searchCriteria }) => {
                     Rp {formatPrice(room.price)}
                     <span className="text-white/50 text-[10px]"> /night</span>
                   </div>
+                  {/* Unit Badge */}
+                  {room.total_units > 1 && (
+                    <div className="absolute top-4 left-4">
+                      {room.is_available === 0 || room.is_available === false ? (
+                        <span className="bg-red-600/90 backdrop-blur-sm text-white px-2.5 py-1 rounded-full text-[10px] font-semibold">
+                          0 unit tersedia
+                        </span>
+                      ) : (
+                        <span className="bg-green-600/90 backdrop-blur-sm text-white px-2.5 py-1 rounded-full text-[10px] font-semibold">
+                          {room.available_units} unit tersedia
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Content */}
                 <div className="p-6">
                   <button 
-                    onClick={() => room.is_available !== 0 && handleClick(room)} 
-                    className={`text-left w-full ${room.is_available === 0 ? 'cursor-not-allowed opacity-60' : ''}`}
-                    disabled={room.is_available === 0}
+                    onClick={() => (room.is_available !== 0 && room.is_available !== false) && handleClick(room)} 
+                    className={`text-left w-full ${(room.is_available === 0 || room.is_available === false) ? 'cursor-not-allowed opacity-60' : ''}`}
+                    disabled={room.is_available === 0 || room.is_available === false}
                   >
                     <h3 className="font-playfair text-lg font-semibold text-hotel-primary mb-3 group-hover:text-hotel-accent transition-colors duration-300">
                       {room.name}

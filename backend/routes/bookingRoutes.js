@@ -8,7 +8,10 @@ router.post('/', authMiddleware, upload.single('payment_proof'), bookingControll
 router.get('/my-bookings', authMiddleware, bookingController.getUserBookings);
 router.get('/all', authMiddleware, bookingController.getAllBookings);
 router.get('/all-payments', authMiddleware, adminMiddleware, bookingController.getAllPayments);
+router.get('/stats', authMiddleware, adminMiddleware, bookingController.getStats);
+router.get('/analytics', authMiddleware, adminMiddleware, bookingController.getAnalytics);
 router.patch('/:id/status', authMiddleware, bookingController.updateBookingStatus);
+router.post('/:id/refresh-token', authMiddleware, bookingController.refreshPaymentToken);
 router.delete('/:id', authMiddleware, bookingController.deleteBooking);
 router.post('/midtrans-webhook', bookingController.midtransWebhook);
 

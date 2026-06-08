@@ -1,74 +1,12 @@
 // server.js
+const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 const app = require('./app');
 const db = require('./config/db');
 const PORT = process.env.PORT || 5000;
 
 async function prepareDatabase() {
   try {
-    // 1. Create rooms table if not exists
-    const [roomsTableRows] = await db.query(
-      `SELECT COUNT(*) AS cnt FROM information_schema.TABLES \
-       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'rooms'`
-    );
-    if (roomsTableRows[0].cnt === 0) {
-      await db.query(
-        `CREATE TABLE rooms (
-          id INT NOT NULL AUTO_INCREMENT,
-          name VARCHAR(255) NOT NULL,
-          price DECIMAL(12,2) NOT NULL,
-          capacity INT NOT NULL DEFAULT 1,
-          size VARCHAR(50) DEFAULT NULL,
-          facility VARCHAR(100) DEFAULT NULL,
-          description TEXT DEFAULT NULL,
-          amenities TEXT DEFAULT NULL,
-          image_url VARCHAR(512) DEFAULT NULL,
-          image_url_2 VARCHAR(512) DEFAULT NULL,
-          created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
-          updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          PRIMARY KEY (id)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`
-      );
-      console.log('Created rooms table.');
-
-      // Insert default rooms
-      await db.query(`
-        INSERT INTO rooms (name, price, capacity, size, facility, description, amenities, image_url, image_url_2) VALUES
-        ('Classic Double Room', 150000, 2, '30 M', 'beach', 'Let yourself fully relax in our luxurious favorable accommodations with lots of facilities and high-level service.', 'Bathroom essentials, Bedroom comforts, Free parking, Hair dryer, Heating, Terrace, Wi-Fi', 'https://themes.getmotopress.com/albatross/wp-content/uploads/sites/37/2020/11/standard-single-room-920x650.jpg', 'https://themes.getmotopress.com/albatross/wp-content/uploads/sites/37/2020/11/comfort-triple-room-920x650.jpg'),
-        ('Comfort Triple Room', 250000, 3, '40 M', 'beach', 'Let yourself fully relax in our luxurious favorable accommodations with lots of facilities and high-level service.', 'Bathroom essentials, Bedroom comforts, Free parking, Hair dryer, Heating, Terrace, Wi-Fi', 'https://themes.getmotopress.com/albatross/wp-content/uploads/sites/37/2020/11/comfort-triple-room-920x650.jpg', 'https://themes.getmotopress.com/albatross/wp-content/uploads/sites/37/2020/11/comfort-triple-room2-920x650.jpg'),
-        ('Standard Single Room', 100000, 1, '25 M', 'Swiming Pool', 'Standard Single room is available with either double or single beds. Designed in an open-concept living area.', 'Bathroom essentials, Bedroom comforts, Free parking, Hair dryer, Heating, Terrace, Wi-Fi', 'https://themes.getmotopress.com/albatross/wp-content/uploads/sites/37/2020/11/standard-single-room2-1536x1094.jpg', 'https://themes.getmotopress.com/albatross/wp-content/uploads/sites/37/2020/11/standard-single-room-920x650.jpg'),
-        ('Superior Double Room', 200000, 2, '40 M', 'Seaside', 'Your perfect choice for staying in a big city, where you can come and fully relax after an eventful day.', 'Bathroom essentials, Bedroom comforts, Free parking, Hair dryer, Heating, Terrace, Wi-Fi', 'https://themes.getmotopress.com/albatross/wp-content/uploads/sites/37/2020/11/superior-double-room2-1536x1094.jpg', 'https://themes.getmotopress.com/albatross/wp-content/uploads/sites/37/2020/11/superior-double-room-920x650.jpg'),
-        ('Mountain View Suite', 250000, 4, '35 M', 'beach', 'Let yourself fully relax in our luxurious favorable accommodations with lots of facilities.', 'Bathroom essentials, Bedroom comforts, Free parking, Hair dryer, Heating, Terrace, Wi-Fi', 'https://themes.getmotopress.com/albatross/wp-content/uploads/sites/37/2020/11/classic-double-room-920x650.jpg', 'https://themes.getmotopress.com/albatross/wp-content/uploads/sites/37/2020/11/standard-single-room-920x650.jpg')
-      `);
-      console.log('Inserted default rooms.');
-    } else {
-      console.log('rooms table already exists.');
-    }
-
-    // Check for is_active column in rooms
-    const [isActiveColumnRows] = await db.query(
-      `SELECT COUNT(*) AS cnt FROM information_schema.COLUMNS \
-       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'rooms' AND COLUMN_NAME = 'is_active'`
-    );
-    if (isActiveColumnRows[0].cnt === 0) {
-      await db.query(`ALTER TABLE rooms ADD COLUMN is_active BOOLEAN DEFAULT true`);
-      console.log('Added is_active column to rooms table.');
-    } else {
-      console.log('is_active column already exists.');
-    }
-
-    // 2. Add room_id to bookings table if not exists
-    const [roomIdColumnRows] = await db.query(
-      `SELECT COUNT(*) AS cnt FROM information_schema.COLUMNS \
-       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'bookings' AND COLUMN_NAME = 'room_id'`
-    );
-    if (roomIdColumnRows[0].cnt === 0) {
-      await db.query(`ALTER TABLE bookings ADD COLUMN room_id INT DEFAULT NULL AFTER user_id`);
-      console.log('Added room_id column to bookings table.');
-    } else {
-      console.log('room_id column already exists.');
-    }
-
-    // existing alterations...
     const [statusColumnRows] = await db.query(
       `SELECT COUNT(*) AS cnt FROM information_schema.COLUMNS \
        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'bookings' AND COLUMN_NAME = 'status'`
@@ -136,6 +74,44 @@ async function prepareDatabase() {
         console.log('Added redirect_url column to payments table.');
       }
     }
+
+    const [reviewTableRows] = await db.query(
+      `SELECT COUNT(*) AS cnt FROM information_schema.TABLES \
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'reviews'`
+    );
+    if (reviewTableRows[0].cnt === 0) {
+      await db.query(
+        `CREATE TABLE reviews (
+          id INT NOT NULL AUTO_INCREMENT,
+          user_id INT NOT NULL,
+          room_id INT NOT NULL,
+          booking_id INT NOT NULL,
+          rating INT NOT NULL DEFAULT 5,
+          comment TEXT DEFAULT NULL,
+          created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          PRIMARY KEY (id),
+          UNIQUE KEY booking_id (booking_id),
+          KEY fk_reviews_user (user_id),
+          KEY fk_reviews_room (room_id),
+          CONSTRAINT fk_reviews_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+          CONSTRAINT fk_reviews_room FOREIGN KEY (room_id) REFERENCES rooms (id) ON DELETE CASCADE,
+          CONSTRAINT fk_reviews_booking FOREIGN KEY (booking_id) REFERENCES bookings (id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`
+      );
+      console.log('Created reviews table.');
+    } else {
+      console.log('reviews table already exists.');
+    }
+
+    // Pastikan kolom status di tabel bookings bisa menerima 'completed'
+    try {
+      await db.query(`ALTER TABLE bookings MODIFY COLUMN status VARCHAR(50) DEFAULT 'pending'`);
+      console.log('Updated bookings table status column to VARCHAR(50).');
+    } catch (e) {
+      console.log('Could not alter bookings status column (might already be altered or another error):', e.message);
+    }
+
   } catch (err) {
     console.error('Database preparation failed:', err.message || err);
   }
@@ -144,5 +120,9 @@ async function prepareDatabase() {
 prepareDatabase().then(() => {
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on port ${PORT}`);
+    
+    // Start background jobs
+    const { startAutoCancelService } = require('./services/cancelBooking');
+    startAutoCancelService();
   });
 });

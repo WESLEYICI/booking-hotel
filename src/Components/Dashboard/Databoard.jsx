@@ -11,6 +11,8 @@ const Databoard = () => {
   const [roomsFull, setRoomsFull] = useState(0);
   const [roomsAvailable, setRoomsAvailable] = useState(0);
   const [fullRoomsList, setFullRoomsList] = useState([]);
+  const [revenueData, setRevenueData] = useState([]);
+  const [popularRooms, setPopularRooms] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -41,23 +43,44 @@ const Databoard = () => {
       }
     };
 
-    const fetchRooms = async () => {
+    const fetchStats = async () => {
       try {
-        const res = await api.get('/rooms');
-        const rooms = res.data.data || [];
+        const [roomsRes, statsRes] = await Promise.all([
+          api.get('/rooms'),
+          api.get('/bookings/stats'),
+        ]);
+        const rooms = roomsRes.data.data || [];
         setTotalRooms(rooms.length);
-        const full = rooms.filter(r => r.is_available === false || r.is_available === 0);
-        setRoomsFull(full.length);
-        setRoomsAvailable(rooms.length - full.length);
+
+        const stats = statsRes.data;
+        const occupied = stats.active_confirmed_bookings || 0;
+        setRoomsFull(occupied);
+        setRoomsAvailable(rooms.length - occupied);
+
+        // Daftar kamar yang "penuh" berdasarkan booking confirmed hari ini
+        // Tampilkan nama kamar jika ada room_id, jika tidak tampilkan angka booking aktif
+        const full = rooms.filter(r =>
+          r.is_available === false || r.is_available === 0 || r.is_available === '0'
+        );
         setFullRoomsList(full);
       } catch (err) {
-        console.error('Gagal ambil kamar:', err);
+        console.error('Gagal ambil stats:', err);
+      }
+
+      try {
+        const analyticsRes = await api.get('/bookings/analytics');
+        if (analyticsRes.data.success) {
+          setRevenueData(analyticsRes.data.data.revenue || []);
+          setPopularRooms(analyticsRes.data.data.popularRooms || []);
+        }
+      } catch (err) {
+        console.error('Gagal ambil analytics:', err);
       } finally {
         setLoading(false);
       }
     };
 
-    Promise.all([fetchUsers(), fetchBookings(), fetchPayments(), fetchRooms()]);
+    Promise.all([fetchUsers(), fetchBookings(), fetchPayments(), fetchStats()]);
   }, []);
 
   const statCards = [
@@ -131,7 +154,7 @@ const Databoard = () => {
       {/* Room Availability Status */}
       <div className="bg-white rounded-2xl shadow-card p-6">
         <h3 className="font-playfair text-lg font-bold text-hotel-primary mb-1">Status Kamar Hari Ini</h3>
-        <p className="text-hotel-charcoal/40 text-xs mb-5">Berdasarkan booking aktif yang sedang berlangsung</p>
+        <p className="text-hotel-charcoal/40 text-xs mb-5">Berdasarkan booking <strong>Confirmed</strong> yang aktif hari ini</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {/* Tersedia */}
           <div className="flex items-center gap-4 bg-green-50 border border-green-100 rounded-xl px-5 py-4">
@@ -205,6 +228,85 @@ const Databoard = () => {
             <p className="text-xs text-green-600 font-medium">✅ Semua kamar saat ini tersedia!</p>
           </div>
         )}
+      </div>
+
+      {/* Analytics Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Revenue Chart */}
+        <div className="bg-white rounded-2xl shadow-card p-6 lg:col-span-2">
+          <h3 className="font-playfair text-lg font-bold text-hotel-primary mb-1">Pendapatan 6 Bulan Terakhir</h3>
+          <p className="text-hotel-charcoal/40 text-xs mb-6">Berdasarkan booking Confirmed</p>
+          
+          <div className="h-64 flex items-end gap-2 sm:gap-4 mt-8">
+            {loading ? (
+              <div className="w-full h-full flex justify-center items-center text-hotel-charcoal/30 text-sm">Memuat data grafik...</div>
+            ) : revenueData.length === 0 ? (
+              <div className="w-full h-full flex justify-center items-center text-hotel-charcoal/30 text-sm">Belum ada data pendapatan</div>
+            ) : (
+              (() => {
+                const maxTotal = Math.max(...revenueData.map(d => parseFloat(d.total)));
+                return revenueData.map((data, idx) => {
+                  const heightPercent = maxTotal > 0 ? (parseFloat(data.total) / maxTotal) * 100 : 0;
+                  return (
+                    <div key={idx} className="flex-1 flex flex-col items-center group">
+                      {/* Tooltip Hover */}
+                      <div className="opacity-0 group-hover:opacity-100 transition-opacity mb-2 bg-hotel-dark text-white text-[10px] px-2 py-1 rounded shadow-lg pointer-events-none whitespace-nowrap">
+                        Rp {new Intl.NumberFormat('id-ID').format(data.total)}
+                      </div>
+                      
+                      {/* Bar */}
+                      <div className="w-full max-w-[40px] bg-hotel-accent/20 rounded-t-sm relative flex items-end">
+                        <div 
+                          className="w-full bg-gradient-to-t from-hotel-primary to-hotel-accent rounded-t-sm transition-all duration-1000 group-hover:opacity-90"
+                          style={{ height: `${heightPercent}%`, minHeight: heightPercent > 0 ? '4px' : '0' }}
+                        ></div>
+                      </div>
+                      
+                      {/* Label */}
+                      <p className="text-[10px] sm:text-xs text-hotel-charcoal/60 mt-2 text-center font-medium">
+                        {data.name}
+                      </p>
+                    </div>
+                  );
+                });
+              })()
+            )}
+          </div>
+        </div>
+
+        {/* Popular Rooms */}
+        <div className="bg-white rounded-2xl shadow-card p-6">
+          <h3 className="font-playfair text-lg font-bold text-hotel-primary mb-1">Kamar Favorit</h3>
+          <p className="text-hotel-charcoal/40 text-xs mb-6">Top 5 tipe kamar terbanyak dibooking</p>
+          
+          <div className="space-y-4">
+            {loading ? (
+              <div className="text-hotel-charcoal/30 text-sm text-center py-4">Memuat data...</div>
+            ) : popularRooms.length === 0 ? (
+              <div className="text-hotel-charcoal/30 text-sm text-center py-4">Belum ada data booking</div>
+            ) : (
+              popularRooms.map((room, idx) => {
+                const maxBookings = Math.max(...popularRooms.map(r => r.total_bookings));
+                const widthPercent = maxBookings > 0 ? (room.total_bookings / maxBookings) * 100 : 0;
+                
+                return (
+                  <div key={idx}>
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="font-medium text-hotel-charcoal">{room.name}</span>
+                      <span className="font-bold text-hotel-primary">{room.total_bookings} kali</span>
+                    </div>
+                    <div className="w-full bg-gray-100 rounded-full h-1.5">
+                      <div 
+                        className="bg-hotel-accent h-1.5 rounded-full" 
+                        style={{ width: `${widthPercent}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

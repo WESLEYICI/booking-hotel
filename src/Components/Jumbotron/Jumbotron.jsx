@@ -66,7 +66,8 @@ const Jumbotron = ({ user, onSearch }) => {
           <div className="w-20 h-[1px] bg-gradient-to-r from-transparent via-hotel-accent to-transparent mb-10 opacity-0 animate-fade-in delay-400" />
         </div>
 
-        {/* Search Bar Panel */}
+        {/* Search Bar Panel — hanya tampil untuk tamu/user biasa */}
+        {user?.role !== 'admin' && (
         <div className="absolute bottom-16 left-1/2 -translate-x-1/2 w-full max-w-5xl px-4 z-20">
           <div className="opacity-0 animate-fade-in-up delay-500">
             <div className="bg-white/10 backdrop-blur-md border border-white/20 p-2 md:p-3 rounded-2xl md:rounded-full shadow-2xl">
@@ -132,6 +133,7 @@ const Jumbotron = ({ user, onSearch }) => {
           </div>
           </div>
         </div>
+        )}
 
         {/* Scroll indicator - Moved up slightly */}
         <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 opacity-0 animate-fade-in delay-600 hidden md:flex">

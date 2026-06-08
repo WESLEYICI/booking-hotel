@@ -1,42 +1,18 @@
 const Booking = require('../Models/Booking.js');
+const Payment = require('../Models/Payment.js');
+const Voucher = require('../Models/Voucher.js');
 const paymentGateway = require('../services/paymentGateway');
 
 const bookingController = {
   createBooking: async (req, res) => {
     try {
-      const payment_type = req.body.payment_type || 'bank_transfer';
-
-      const Room = require('../Models/Room');
-      const room_id = req.body.room_id;
-
-      if (!room_id) {
-        return res.status(400).json({ message: 'Room ID is required' });
-      }
-
-      // Validasi Tanggal (Keamanan Logic)
-      const checkInDate = new Date(req.body.check_in);
-      const checkOutDate = new Date(req.body.check_out);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
-      if (checkInDate < today) {
-        return res.status(400).json({ message: 'Tanggal Check-in tidak boleh di masa lalu.' });
-      }
-      if (checkOutDate <= checkInDate) {
-        return res.status(400).json({ message: 'Tanggal Check-out harus lebih besar dari Check-in.' });
-      }
-
-      // Validasi Ketersediaan Kamar
-      const isAvailable = await Room.checkAvailability(room_id, req.body.check_in, req.body.check_out);
-      if (!isAvailable) {
-        return res.status(400).json({ message: 'Maaf, kamar ini sudah dibooking pada tanggal tersebut.' });
-      }
+      const payment_type = req.body.payment_type || 'all';
 
       const bookingData = {
         user_id: req.user.id,
-        room_id: room_id,
-        name: req.body.name, // tetap simpan nama kamar
-        nama: req.body.nama, // nama tamu
+        room_id: req.body.room_id || null,
+        name: req.body.name,
+        nama: req.body.nama,
         email: req.body.email,
         phone_number: req.body.phone_number,
         check_in: req.body.check_in,
@@ -48,16 +24,21 @@ const bookingController = {
 
       const booking = await Booking.create(bookingData);
 
+      // Increment usage count of the voucher if one was provided
+      if (req.body.voucher_code) {
+        await Voucher.incrementUsed(req.body.voucher_code);
+      }
+
       const payment = await paymentGateway.createPaymentSession({
         booking_id: booking.id,
         amount: bookingData.harga,
         payment_type,
         customer: {
-          nama: req.body.nama || req.body.name,
-          email: req.body.email,
-          phone: req.body.phone_number
+          nama: bookingData.nama || bookingData.name,
+          email: bookingData.email,
+          phone_number: bookingData.phone_number,
         },
-        item_name: 'Hotel Booking'
+        item_name: 'Hotel Booking',
       });
 
       res.status(201).json({ booking, payment });
@@ -95,11 +76,83 @@ const bookingController = {
     }
   },
 
+  getStats: async (req, res) => {
+    try {
+      const db = require('../config/db');
+      const today = new Date().toISOString().split('T')[0];
+
+      // Hitung booking yang confirmed dan aktif hari ini (check_in <= today < check_out)
+      const [[{ active_bookings }]] = await db.query(
+        `SELECT COUNT(*) as active_bookings FROM bookings 
+         WHERE status = 'confirmed' AND check_in <= ? AND check_out > ?`,
+        [today, today]
+      );
+
+      // Total kamar aktif
+      const [[{ total_rooms }]] = await db.query(
+        `SELECT SUM(total_units) as total_rooms FROM rooms WHERE is_active = true`
+      );
+
+      res.json({
+        active_confirmed_bookings: Number(active_bookings),
+        total_rooms: Number(total_rooms) || 0,
+        occupancy_rate: total_rooms > 0 ? Math.round((active_bookings / total_rooms) * 100) : 0,
+      });
+    } catch (err) {
+      console.error('Get stats error:', err);
+      res.status(500).json({ message: err.message || 'Server error' });
+    }
+  },
+
+  getAnalytics: async (req, res) => {
+    try {
+      const db = require('../config/db');
+      
+      // 1. Monthly Revenue (Last 6 Months)
+      // Using ANY_VALUE to bypass strict ONLY_FULL_GROUP_BY rules on formatting dates
+      const [revenueData] = await db.query(`
+        SELECT 
+          ANY_VALUE(DATE_FORMAT(created_at, '%b %Y')) as name,
+          DATE_FORMAT(created_at, '%Y-%m') as month_sort,
+          SUM(harga) as total
+        FROM bookings
+        WHERE status = 'confirmed'
+          AND created_at >= DATE_SUB(NOW(), INTERVAL 6 MONTH)
+        GROUP BY DATE_FORMAT(created_at, '%Y-%m')
+        ORDER BY month_sort ASC
+      `);
+
+      // 2. Popular Rooms (All time confirmed)
+      const [popularRooms] = await db.query(`
+        SELECT 
+          ANY_VALUE(r.name) as name,
+          COUNT(b.id) as total_bookings
+        FROM bookings b
+        JOIN rooms r ON b.room_id = r.id
+        WHERE b.status = 'confirmed'
+        GROUP BY r.id
+        ORDER BY total_bookings DESC
+        LIMIT 5
+      `);
+
+      res.json({
+        success: true,
+        data: {
+          revenue: revenueData,
+          popularRooms: popularRooms
+        }
+      });
+    } catch (err) {
+      console.error('Get analytics error:', err);
+      require('fs').writeFileSync('debug_analytics_error.txt', err.message);
+      res.status(500).json({ message: err.message || 'Server error' });
+    }
+  },
+
   updateBookingStatus: async (req, res) => {
     try {
       const { id } = req.params;
       const { status } = req.body;
-      const Payment = require('../Models/Payment');
 
       if (!id || !status) {
         return res.status(400).json({
@@ -108,26 +161,12 @@ const bookingController = {
         });
       }
 
-      const validStatuses = ['pending', 'confirmed', 'cancelled'];
+      const validStatuses = ['pending', 'confirmed', 'completed', 'cancelled'];
       if (!validStatuses.includes(status)) {
         return res.status(400).json({
           success: false,
           message: `Status tidak valid. Gunakan: ${validStatuses.join(', ')}`,
         });
-      }
-
-      // Jika admin ingin confirm, cek apakah user sudah membayar
-      if (status === 'confirmed') {
-        const payments = await Payment.findByBookingId(id);
-        const hasPaid = payments && payments.some(
-          (p) => p.transaction_status === 'settlement' || p.transaction_status === 'capture'
-        );
-        if (!hasPaid) {
-          return res.status(403).json({
-            success: false,
-            message: 'Tidak dapat mengkonfirmasi booking. User belum melakukan pembayaran.',
-          });
-        }
       }
 
       const updatedBooking = await Booking.updateStatus(id, status);
@@ -137,6 +176,21 @@ const bookingController = {
           message: 'Booking tidak ditemukan',
         });
       }
+
+      // Jika diubah menjadi confirmed oleh admin, kirim email
+      if (status === 'confirmed') {
+        try {
+          const db = require('../config/db');
+          const { sendInvoiceEmail } = require('../services/mailer');
+          const [[bookingData]] = await db.query('SELECT b.*, u.email, u.name as user_name FROM bookings b JOIN users u ON b.user_id = u.id WHERE b.id = ?', [id]);
+          if (bookingData && bookingData.email) {
+            await sendInvoiceEmail(bookingData, bookingData.email, bookingData.user_name || bookingData.nama);
+          }
+        } catch (mailErr) {
+          console.error('Error sending invoice email via admin manual update:', mailErr);
+        }
+      }
+
       res.json({
         success: true,
         data: updatedBooking,
@@ -178,27 +232,108 @@ const bookingController = {
       });
     }
   },
-
   midtransWebhook: async (req, res) => {
     try {
-      const { order_id, transaction_status } = req.body;
-      const Payment = require('../Models/Payment');
-      
-      const payment = await Payment.findByOrderId(order_id);
-      if (payment) {
-        await Payment.updateStatus(order_id, transaction_status);
-        
-        if (transaction_status === 'settlement' || transaction_status === 'capture') {
-          await Booking.updateStatus(payment.booking_id, 'confirmed');
-        } else if (transaction_status === 'cancel' || transaction_status === 'expire' || transaction_status === 'deny') {
-          await Booking.updateStatus(payment.booking_id, 'cancelled');
-        }
+      const { order_id, transaction_status, fraud_status, payment_type, transaction_time } = req.body;
+
+      if (!order_id) {
+        return res.status(400).json({ message: 'Missing order_id' });
       }
-      
-      res.status(200).json({ status: 'success' });
+
+      const payments = await Payment.findAll();
+      const payment = payments.find(p => p.order_id === order_id);
+
+      if (!payment) {
+        return res.status(404).json({ message: 'Payment not found' });
+      }
+
+      const db = require('../config/db');
+      let mappedStatus;
+      if (transaction_status === 'capture' || transaction_status === 'settlement') {
+        mappedStatus = 'settlement';
+      } else if (transaction_status === 'pending') {
+        mappedStatus = 'pending';
+      } else if (transaction_status === 'deny' || transaction_status === 'cancel' || transaction_status === 'expire') {
+        mappedStatus = 'failure';
+      } else {
+        mappedStatus = transaction_status;
+      }
+
+      await db.query(
+        `UPDATE payments SET transaction_status = ?, payment_type = COALESCE(?, payment_type), transaction_time = COALESCE(?, transaction_time) WHERE order_id = ?`,
+        [mappedStatus, payment_type, transaction_time, order_id]
+      );
+
+      if (mappedStatus === 'settlement') {
+        await db.query(`UPDATE bookings SET status = 'confirmed' WHERE id = ?`, [payment.booking_id]);
+
+        // Kirim email invoice otomatis
+        try {
+          const { sendInvoiceEmail } = require('../services/mailer');
+          const [[bookingData]] = await db.query('SELECT b.*, u.email, u.name as user_name FROM bookings b JOIN users u ON b.user_id = u.id WHERE b.id = ?', [payment.booking_id]);
+          if (bookingData && bookingData.email) {
+            await sendInvoiceEmail(bookingData, bookingData.email, bookingData.user_name || bookingData.nama);
+          }
+        } catch (mailErr) {
+          console.error('Error sending invoice email via webhook:', mailErr);
+        }
+
+      } else if (mappedStatus === 'failure') {
+        await db.query(`UPDATE bookings SET status = 'cancelled' WHERE id = ?`, [payment.booking_id]);
+      }
+
+      res.status(200).json({ message: 'OK' });
     } catch (err) {
-      console.error('Webhook error:', err);
-      res.status(500).json({ status: 'error', message: err.message });
+      console.error('Midtrans webhook error:', err);
+      res.status(500).json({ message: err.message || 'Server error' });
+    }
+  },
+  // Generate ulang snap token untuk booking yang sudah ada (ganti metode pembayaran)
+  refreshPaymentToken: async (req, res) => {
+    try {
+      const { id } = req.params;
+      const payment_type = req.body.payment_type || 'all';
+
+      // Cari booking milik user
+      const booking = await Booking.findById(id);
+      if (!booking) {
+        return res.status(404).json({ message: 'Booking tidak ditemukan' });
+      }
+      if (booking.user_id !== req.user.id) {
+        return res.status(403).json({ message: 'Akses ditolak' });
+      }
+      if (booking.status !== 'pending') {
+        return res.status(400).json({ message: 'Hanya booking berstatus pending yang bisa di-refresh' });
+      }
+
+      // Panggil Midtrans untuk dapat token baru
+      const { createSnapToken } = require('../services/paymentGateway');
+      const order_id = `ORDER-${booking.id}-${Date.now()}`;
+      const result = await createSnapToken({
+        booking_id: booking.id,
+        order_id,
+        amount: booking.harga,
+        payment_type,
+        customer: {
+          nama: booking.nama || booking.name,
+          email: booking.email,
+          phone_number: booking.phone_number,
+        },
+        item_name: 'Hotel Booking',
+      });
+
+      // UPDATE record payment yang sudah ada (jangan INSERT baru)
+      await Payment.updateByBookingId(booking.id, {
+        order_id,
+        snap_token: result.snap_token,
+        redirect_url: result.redirect_url,
+        payment_type: payment_type !== 'all' ? payment_type : null,
+      });
+
+      res.json({ snap_token: result.snap_token });
+    } catch (err) {
+      console.error('Refresh payment token error:', err);
+      res.status(500).json({ message: err.message || 'Server error' });
     }
   },
 };

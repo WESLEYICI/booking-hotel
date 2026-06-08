@@ -143,13 +143,16 @@ const Navbars = ({ setIsAuthenticated, isAuthenticated, user, logout, setUser })
               >
                 Contact
               </Link>
-              <Link
-                to="/my-bookings"
-                className={`text-sm font-medium ${textColor} ${linkHoverClass} transition-all duration-300 relative after:content-[''] after:absolute after:bottom-[-4px] after:left-0 after:w-0 after:h-[2px] after:bg-hotel-accent after:transition-all after:duration-300 hover:after:w-full`}
-              >
-                My Bookings
-              </Link>
-              {MyBookings && (
+              {/* My Bookings & How to Pay — hanya untuk user biasa */}
+              {isAuthenticated && user?.role !== 'admin' && (
+                <Link
+                  to="/my-bookings"
+                  className={`text-sm font-medium ${textColor} ${linkHoverClass} transition-all duration-300 relative after:content-[''] after:absolute after:bottom-[-4px] after:left-0 after:w-0 after:h-[2px] after:bg-hotel-accent after:transition-all after:duration-300 hover:after:w-full`}
+                >
+                  My Bookings
+                </Link>
+              )}
+              {MyBookings && user?.role !== 'admin' && (
                 <button
                   onClick={() => setModalState('opening')}
                   className={`text-sm font-medium ${textColor} ${linkHoverClass} transition-all duration-300 cursor-pointer relative after:content-[''] after:absolute after:bottom-[-4px] after:left-0 after:w-0 after:h-[2px] after:bg-hotel-accent after:transition-all after:duration-300 hover:after:w-full`}
@@ -210,7 +213,9 @@ const Navbars = ({ setIsAuthenticated, isAuthenticated, user, logout, setUser })
                     : []),
                   { to: '/team', label: 'About' },
                   { to: '/Contact', label: 'Contact' },
-                  { to: '/my-bookings', label: 'My Bookings' },
+                  ...(isAuthenticated && user?.role !== 'admin'
+                    ? [{ to: '/my-bookings', label: 'My Bookings' }]
+                    : []),
                 ].map((link) => (
                   <Link
                     key={link.to}
@@ -221,7 +226,7 @@ const Navbars = ({ setIsAuthenticated, isAuthenticated, user, logout, setUser })
                     {link.label}
                   </Link>
                 ))}
-                {MyBookings && (
+                {MyBookings && user?.role !== 'admin' && (
                   <button
                     onClick={() => {
                       setIsOpen(false);
