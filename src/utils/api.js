@@ -5,7 +5,7 @@ import axios from 'axios';
 //   withCredentials: true,
 // });
 const api = axios.create({
-  baseURL: 'http://localhost:5000/api',
+  baseURL: 'https://booking-hotel-phi-seven.vercel.app/api',
   withCredentials: true,
 });
 api.interceptors.request.use(
