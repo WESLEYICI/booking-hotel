@@ -104,8 +104,21 @@ const DataDiscount = () => {
     return new Date(dateStr).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
   };
 
-  const isExpired = (endDate) => new Date(endDate) < new Date();
-  const isNotStarted = (startDate) => new Date(startDate) > new Date();
+  const isExpired = (endDate) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const end = new Date(endDate);
+    end.setHours(0, 0, 0, 0);
+    return end < today;
+  };
+  
+  const isNotStarted = (startDate) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const start = new Date(startDate);
+    start.setHours(0, 0, 0, 0);
+    return start > today;
+  };
 
   const getStatusBadge = (v) => {
     if (!v.is_active) return <span className="badge bg-gray-100 text-gray-500">Nonaktif</span>;

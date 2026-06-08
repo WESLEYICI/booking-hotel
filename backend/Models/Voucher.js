@@ -45,7 +45,9 @@ class Voucher {
 
   // Validasi kode voucher (untuk dipakai user saat booking)
   static async validateCode(code) {
-    const today = new Date().toISOString().split('T')[0];
+    // Mengambil tanggal hari ini sesuai waktu lokal Indonesia (WIB)
+    const date = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Jakarta"}));
+    const today = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
     const [rows] = await db.query(
       `SELECT * FROM vouchers
        WHERE code = ?
