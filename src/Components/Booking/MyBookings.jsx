@@ -50,11 +50,8 @@ const MyBookings = () => {
     }
 
     const script = document.createElement('script');
-    const isProduction = process.env.REACT_APP_MIDTRANS_IS_PRODUCTION !== 'false';
-    script.src = isProduction
-      ? 'https://app.midtrans.com/snap/snap.js'
-      : 'https://app.sandbox.midtrans.com/snap/snap.js';
-    script.setAttribute('data-client-key', process.env.REACT_APP_MIDTRANS_CLIENT_KEY || 'YOUR_CLIENT_KEY');
+    script.src = 'https://app.sandbox.midtrans.com/snap/snap.js';
+    script.setAttribute('data-client-key', 'Mid-client-5lxiwuurfKXyAflc');
     script.async = true;
     script.onload = () => setSnapLoaded(true);
     document.body.appendChild(script);
